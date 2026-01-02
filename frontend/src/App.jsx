@@ -27,37 +27,19 @@ function App() {
     }, []);
 
     // Observation Loop
-    // Observation Loop
     useEffect(() => {
-        let isActive = true;
-
-        const loop = async () => {
-            if (!isWatching || !isActive) return;
-
-            try {
+        let watchInterval;
+        if (isWatching) {
+            watchInterval = setInterval(async () => {
                 // Request analysis (Backend handles rate limiting)
-                // We keep analyze=true so the backend can decide when to trigger LLM
                 const data = await captureScreen(true);
-                if (isActive && data.status === 'ok') {
+                if (data.status === 'ok') {
                     setLastImage(`data:image/jpeg;base64,${data.image}`);
                     setActiveWindow(data.window);
                 }
-            } catch (e) {
-                console.error("Observation error:", e);
-            }
-
-            if (isActive && isWatching) {
-                setTimeout(loop, 100); // Poll every 100ms for ~10fps
-            }
-        };
-
-        if (isWatching) {
-            loop();
+            }, 1000); // Check every 1 second
         }
-
-        return () => {
-            isActive = false;
-        };
+        return () => clearInterval(watchInterval);
     }, [isWatching]);
 
     return (

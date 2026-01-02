@@ -30,7 +30,9 @@ class ChatResponse(BaseModel):
 # -- State --
 # We keep a simple in-memory queue for immediate reactions to send to frontend
 reaction_queue = []
-last_analysis_time = 0
+last_analyzed_title = ""
+last_analyzed_image = None
+last_trigger_time = 0
 
 @app.get("/")
 def read_root():
@@ -46,17 +48,32 @@ async def get_screen_capture(analyze: bool = False):
     Returns a snapshot of the current screen.
     If analyze=True, it triggers an async LLM analysis of the screen.
     """
-    global last_analysis_time
+    global last_analyzed_title, last_analyzed_image, last_trigger_time
     
-    title = get_active_window_title() # Fast enough to keep sync usually, but could thread if needed
+    title = get_active_window_title()
+    image_b64 = capture_screen_base64(scale=0.5)
     
-    # Offload screen capture to thread to ensure loop never hiccups
-    image_b64 = await asyncio.to_thread(capture_screen_base64, scale=0.5)
+    # -- Simplified Trigger Logic --
+    # 1. Title Change: Immediate
+    # 2. Timer: Every 15 seconds (if no title change)
     
-    # Simple rate limiting for passive analysis (at most once every 10 seconds)
     import time
-    if analyze and (time.time() - last_analysis_time > 10):
-        last_analysis_time = time.time()
+    should_trigger = False
+    current_time = time.time()
+    
+    # Check Title Change
+    if title != last_analyzed_title:
+        print(f"[Trigger] Title changed: '{last_analyzed_title}' -> '{title}'")
+        should_trigger = True
+    
+    # Check Time Cooldown (Periodic reaction)
+    elif (current_time - last_trigger_time) > 15:
+        print(f"[Trigger] Timer > 15s")
+        should_trigger = True
+
+    if analyze and should_trigger:
+        last_analyzed_title = title
+        last_trigger_time = current_time
         asyncio.create_task(process_observation(title, image_b64))
         
     return {
@@ -69,9 +86,7 @@ async def process_observation(window_title, image_b64):
     """Background task to analyze screen and store memory."""
     try:
         image_bytes = base64.b64decode(image_b64)
-        
-        # Heavy blocking call offloaded to thread
-        result = await asyncio.to_thread(mind.analyze_image, image_bytes)
+        result = await mind.analyze_image_async(image_bytes)
         
         # Store in DB
         content = f"User is processing: {window_title}. Observation: {result['description']}"
@@ -118,8 +133,8 @@ async def chat_endpoint(msg: ChatMessage):
     # Record user message
     database.add_memory("chat", f"User: {msg.message}")
     
-    # Generate response (Heavy blocking call offloaded)
-    response_text = await asyncio.to_thread(mind.chat_response, formatted_history, msg.message)
+    # Generate response
+    response_text = mind.chat_response(formatted_history, msg.message)
     
     # Record model response
     database.add_memory("chat", f"Thea: {response_text}")

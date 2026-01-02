@@ -30,7 +30,7 @@ def capture_screen_base64(scale=0.5):
         # Resize to reduce bandwidth/processing
         if scale != 1.0:
             new_size = (int(img.width * scale), int(img.height * scale))
-            img = img.resize(new_size, Image.Resampling.BILINEAR)
+            img = img.resize(new_size, Image.Resampling.LANCZOS)
             
         # Convert to Base64
         buffered = BytesIO()

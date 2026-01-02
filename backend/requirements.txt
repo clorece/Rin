@@ -6,4 +6,3 @@ Pillow
 pywin32
 mss
 google-generativeai
-ollama

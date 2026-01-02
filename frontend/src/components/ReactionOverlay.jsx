@@ -17,7 +17,7 @@ export default function ReactionOverlay({ isWatching }) {
             }
         };
 
-        const interval = setInterval(poll, 3000);
+        const interval = setInterval(poll, 1000);
         return () => clearInterval(interval);
     }, [isWatching]);
 

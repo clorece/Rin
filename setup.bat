@@ -3,7 +3,7 @@ echo ==========================================
 echo      THEA - SYSTEM SETUP
 echo ==========================================
 
-echo [1/4] Detecting Python...
+echo [1/3] Detecting Python...
 python --version > nul 2>&1
 if not errorlevel 1 (
     set CARBON_PYTHON=python
@@ -21,22 +21,7 @@ if not errorlevel 1 (
     )
 )
 
-echo [2/4] Setting up Ollama (Local AI)...
-where ollama >nul 2>nul
-if %ERRORLEVEL% NEQ 0 (
-    echo   - Ollama not found. Attempting to install via Winget...
-    winget install Ollama.Ollama
-    if %ERRORLEVEL% NEQ 0 (
-        echo   ! WARNING: Could not install Ollama automatically.
-        echo   ! Please install it manually from https://ollama.com
-    ) else (
-        echo   - Ollama installed successfully!
-    )
-) else (
-    echo   - Ollama is already installed.
-)
-
-echo [3/4] Setting up Backend...
+echo [2/3] Setting up Backend...
 cd backend
 if exist venv (
     echo   - Virtual environment already exists.
