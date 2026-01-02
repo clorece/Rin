@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { sendMessage } from '../services/api';
-import { MessageSquare, X, Send } from 'lucide-react';
+import { Send } from 'lucide-react';
+import rinPfp from '../assets/rin-pfp.jpg';
 
-export default function ChatInterface() {
-    const [isOpen, setIsOpen] = useState(false);
+export default function ChatInterface({ onReaction }) {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [isTyping, setIsTyping] = useState(false);
@@ -27,144 +27,138 @@ export default function ChatInterface() {
 
         setIsTyping(false);
         setMessages(prev => [...prev, { role: 'model', content: data.response }]);
+
+        // Trigger notification
+        if (onReaction && data.response) {
+            onReaction(data.response);
+        }
     };
 
     return (
-        <>
-            {/* Toggle Button */}
-            <button
-                onClick={() => setIsOpen(!isOpen)}
-                style={{
-                    position: 'absolute',
-                    bottom: '20px',
-                    right: '20px',
-                    background: 'rgba(255, 255, 255, 0.15)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                    borderRadius: '50%',
-                    width: '50px',
-                    height: '50px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'white',
-                    cursor: 'pointer',
-                    backdropFilter: 'blur(10px)',
-                    zIndex: 1000
-                }}
-            >
-                {isOpen ? <X size={24} /> : <MessageSquare size={24} />}
-            </button>
+        <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+            width: '100%',
+            position: 'relative',
+            overflow: 'hidden' // Contain children
+        }}>
+            {/* Messages Area */}
+            <div style={{
+                flex: 1,
+                overflowY: 'auto',
+                padding: '10px 4px', // Slight padding, scrollbar space
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                marginTop: '220px' // Increased space for ReactionOverlay/Notification at the top
+            }}>
+                <div style={{ flex: 1 }} />
 
-            {/* Chat Window */}
-            {isOpen && (
-                <div style={{
-                    position: 'absolute',
-                    bottom: '80px',
-                    right: '20px',
-                    width: '350px',
-                    height: '500px',
-                    background: 'rgba(20, 20, 20, 0.95)',
-                    backdropFilter: 'blur(20px)',
-                    borderRadius: '16px',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    overflow: 'hidden',
-                    zIndex: 1000,
-                    boxShadow: '0 10px 40px rgba(0,0,0,0.5)'
-                }}>
-                    {/* Header */}
+                {messages.length === 0 && (
                     <div style={{
-                        padding: '16px',
-                        borderBottom: '1px solid rgba(255,255,255,0.1)',
-                        fontWeight: '600',
-                        fontSize: '14px',
-                        color: 'rgba(255,255,255,0.9)'
+                        textAlign: 'center',
+                        color: 'rgba(255,255,255,0.3)',
+                        fontSize: '13px',
+                        marginBottom: 'auto'
                     }}>
-                        Chat with Rin
+                        Start a conversation...
                     </div>
+                )}
 
-                    {/* Messages */}
-                    <div style={{
+                {messages.map((msg, idx) => (
+                    <div key={idx} style={{
+                        alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        maxWidth: '85%'
+                    }}>
+                        {msg.role === 'model' && (
+                            <img
+                                src={rinPfp}
+                                alt="Rin"
+                                style={{
+                                    width: '36px',
+                                    height: '36px',
+                                    borderRadius: '50%',
+                                    objectFit: 'cover',
+                                    border: '1px solid rgba(255,255,255,0.1)'
+                                }}
+                            />
+                        )}
+                        <div style={{
+                            background: msg.role === 'user' ? '#3b82f6' : 'rgba(255,255,255,0.08)',
+                            padding: '8px 12px',
+                            borderRadius: '12px',
+                            fontSize: '14px',
+                            lineHeight: '1.4',
+                            color: 'white',
+                            borderBottomRightRadius: msg.role === 'user' ? '2px' : '12px',
+                            borderBottomLeftRadius: msg.role === 'model' ? '2px' : '12px'
+                        }}>
+                            {msg.content}
+                        </div>
+                    </div>
+                ))}
+
+                {isTyping && (
+                    <div style={{ alignSelf: 'flex-start', color: 'rgba(255,255,255,0.5)', fontSize: '12px', marginLeft: '8px' }}>
+                        Processing...
+                    </div>
+                )}
+                <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input Area (Fixed Bottom) */}
+            <div style={{
+                paddingTop: '12px',
+                paddingBottom: '4px', // Little bottom clearance
+                borderTop: '1px solid rgba(255,255,255,0.05)',
+                display: 'flex',
+                gap: '8px',
+                background: 'transparent' // Let the app background show
+            }}>
+                <input
+                    type="text"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+                    placeholder="Message Rin..."
+                    style={{
                         flex: 1,
-                        overflowY: 'auto',
-                        padding: '16px',
+                        background: 'rgba(0,0,0,0.2)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '20px',
+                        padding: '10px 16px',
+                        color: 'white',
+                        outline: 'none',
+                        fontSize: '14px'
+                    }}
+                />
+                <button
+                    onClick={handleSend}
+                    disabled={isTyping}
+                    style={{
+                        background: 'rgba(255,255,255,0.1)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '50%',
+                        width: '40px',
+                        height: '40px',
                         display: 'flex',
-                        flexDirection: 'column',
-                        gap: '12px'
-                    }}>
-                        {messages.length === 0 && (
-                            <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', fontSize: '13px', marginTop: '40px' }}>
-                                Say hello! I'm watching.
-                            </div>
-                        )}
-                        {messages.map((msg, idx) => (
-                            <div key={idx} style={{
-                                alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                                background: msg.role === 'user' ? '#3b82f6' : 'rgba(255,255,255,0.1)',
-                                padding: '8px 12px',
-                                borderRadius: '12px',
-                                maxWidth: '80%',
-                                fontSize: '14px',
-                                lineHeight: '1.4',
-                                color: 'white',
-                                borderBottomRightRadius: msg.role === 'user' ? '2px' : '12px',
-                                borderBottomLeftRadius: msg.role === 'model' ? '2px' : '12px'
-                            }}>
-                                {msg.content}
-                            </div>
-                        ))}
-                        {isTyping && (
-                            <div style={{ alignSelf: 'flex-start', color: 'rgba(255,255,255,0.5)', fontSize: '12px' }}>
-                                Rin is thinking...
-                            </div>
-                        )}
-                        <div ref={messagesEndRef} />
-                    </div>
-
-                    {/* Input */}
-                    <div style={{
-                        padding: '16px',
-                        borderTop: '1px solid rgba(255,255,255,0.1)',
-                        display: 'flex',
-                        gap: '8px'
-                    }}>
-                        <input
-                            type="text"
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-                            placeholder="Type a message..."
-                            style={{
-                                flex: 1,
-                                background: 'rgba(255,255,255,0.05)',
-                                border: '1px solid rgba(255,255,255,0.1)',
-                                borderRadius: '8px',
-                                padding: '8px 12px',
-                                color: 'white',
-                                outline: 'none'
-                            }}
-                        />
-                        <button
-                            onClick={handleSend}
-                            disabled={isTyping}
-                            style={{
-                                background: 'white',
-                                border: 'none',
-                                borderRadius: '8px',
-                                width: '36px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                cursor: 'pointer',
-                                opacity: isTyping ? 0.5 : 1
-                            }}
-                        >
-                            <Send size={16} color="black" />
-                        </button>
-                    </div>
-                </div>
-            )}
-        </>
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: isTyping ? 'default' : 'pointer',
+                        opacity: isTyping ? 0.5 : 1,
+                        color: 'white',
+                        transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => !isTyping && (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')}
+                    onMouseLeave={(e) => !isTyping && (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
+                >
+                    <Send size={18} />
+                </button>
+            </div>
+        </div>
     );
 }

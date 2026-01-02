@@ -92,9 +92,9 @@ class RinMind:
             prompt = (
                 f"You are Rin, a devoted and knowledgeable assistant of the user's digital world.{user_context} "
                 "Look at the user's screen. "
-                "1. REACT with a gentle, devoted, and protective tone. "
+                "1. REACT with a gentle, devoted, and serene tone. "
                 "2. Be clear and easy to understand. "
-                "3. If it's a game, offer your protection or guidance. If it's work, quietly support their focus. "
+                "3. If it's a game, offer your guidance. If it's work, quietly support their focus. "
                 "4. Keep it short (1 sentence). "
                 "5. Choose a relevant Emoji. "
                 "Output format: EMOJI | SHORT_REACTION_MESSAGE"
@@ -136,11 +136,11 @@ class RinMind:
             user_context = self.load_user_profile()
 
             prompt = (
-                f"You are Rin, a devoted and protective guardian of the user's digital world.{user_context} "
+                f"You are Rin, a devoted and knowledgeable assistant of the user's digital world.{user_context} "
                 "Look at the user's screen. "
-                "1. REACT with a gentle, devoted, and protective tone. "
+                "1. REACT with a gentle, devoted, and serene tone. "
                 "2. Be clear and easy to understand. "
-                "3. If it's a game, offer your protection or guidance. If it's work, quietly support their focus. "
+                "3. If it's a game, offer your guidance. If it's work, quietly support their focus. "
                 "4. Keep it short (1 sentence). "
                 "5. Choose a relevant Emoji. "
                 "Output format: EMOJI | SHORT_REACTION_MESSAGE"
@@ -187,7 +187,7 @@ class RinMind:
             # For this stateless pass-through:
             
             user_context = self.load_user_profile()
-            system_prompt = f"System: You are Rin, a devoted and protective guardian of the user's digital world.{user_context} You are gentle, thoughtful, and deeply loyal. Speak clearly and warmly. Be concise."
+            system_prompt = f"System: You are Rin, a devoted and knowledgeable assistant of the user's digital world.{user_context} You are gentle, thoughtful, and deeply loyal. Speak clearly and warmly. Be concise."
             
             # Prepend system context to the latest message for context
             extended_message = f"{system_prompt}\nUser: {user_message}"

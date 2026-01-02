@@ -42,3 +42,10 @@ export const captureScreen = async (analyze = false) => {
         return { status: 'error', error: error.message };
     }
 };
+export async function shutdownBackend() {
+    try {
+        await fetch(`${API_BASE}/shutdown`);
+    } catch (e) {
+        console.log('Backend shutdown command sent (or failed if already off)');
+    }
+}

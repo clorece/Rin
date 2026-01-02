@@ -33,6 +33,8 @@ reaction_queue = []
 last_analyzed_title = ""
 last_analyzed_image = None
 last_trigger_time = 0
+last_seen_image = None
+last_screen_change_time = 0
 
 @app.get("/")
 def read_root():
@@ -147,6 +149,15 @@ def get_updates():
     if reaction_queue:
         return reaction_queue.pop(0)
     return {"type": "none"}
+
+@app.get("/shutdown")
+def shutdown_server():
+    """Kill the backend process."""
+    import os
+    import signal
+    print("Shutting down backend...")
+    os.kill(os.getpid(), signal.SIGTERM)
+    return {"status": "shutting_down"}
 
 if __name__ == "__main__":
     import uvicorn
