@@ -5,16 +5,14 @@ echo ==========================================
 
 :: Pre-flight Check
 if not exist backend\venv (
-    echo ! ERROR: Backend not set up.
-    echo ! Please run 'setup.bat' first.
-    pause
-    exit /b
+    echo ! ERROR: Backend not fully set up.
+    echo ! Launching 'setup.bat' to finish installation...
+    call setup.bat
 )
 if not exist frontend\node_modules (
-    echo ! ERROR: Frontend not set up.
-    echo ! Please run 'setup.bat' first.
-    pause
-    exit /b
+    echo ! ERROR: Frontend not fully set up.
+    echo ! Launching 'setup.bat' to finish installation...
+    call setup.bat
 )
 
 echo Starting Backend...
