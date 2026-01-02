@@ -1,6 +1,6 @@
 @echo off
 echo ==========================================
-echo      THEA - LAUNCHER
+echo      RIN - LAUNCHER
 echo ==========================================
 
 :: Pre-flight Check

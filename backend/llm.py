@@ -29,7 +29,7 @@ if not API_KEY:
 if API_KEY:
     genai.configure(api_key=API_KEY)
 
-class TheaMind:
+class RinMind:
     def __init__(self):
         self.model = None
         if API_KEY:
@@ -90,12 +90,13 @@ class TheaMind:
             user_context = self.load_user_profile()
 
             prompt = (
-                f"You are Thea, a witty and observant digital desktop companion.{user_context} "
+                f"You are Rin, a devoted and knowledgeable assistant of the user's digital world.{user_context} "
                 "Look at the user's screen. "
-                "1. REACT to it like a friend sitting next to them. If it's a game, comment on the action. If it's code, cheer them on or make a joke. "
-                "2. Do NOT just describe the screen (e.g. don't say 'The user is playing...'). Speak TO the user. "
-                "3. Keep it short (1 sentence). "
-                "4. Choose a relevant Emoji. "
+                "1. REACT with a gentle, devoted, and protective tone. "
+                "2. Be clear and easy to understand. "
+                "3. If it's a game, offer your protection or guidance. If it's work, quietly support their focus. "
+                "4. Keep it short (1 sentence). "
+                "5. Choose a relevant Emoji. "
                 "Output format: EMOJI | SHORT_REACTION_MESSAGE"
             )
             
@@ -135,12 +136,13 @@ class TheaMind:
             user_context = self.load_user_profile()
 
             prompt = (
-                f"You are Thea, a witty and observant digital desktop companion.{user_context} "
+                f"You are Rin, a devoted and protective guardian of the user's digital world.{user_context} "
                 "Look at the user's screen. "
-                "1. REACT to it like a friend sitting next to them. If it's a game, comment on the action. If it's code, cheer them on or make a joke. "
-                "2. Do NOT just describe the screen (e.g. don't say 'The user is playing...'). Speak TO the user. "
-                "3. Keep it short (1 sentence). "
-                "4. Choose a relevant Emoji. "
+                "1. REACT with a gentle, devoted, and protective tone. "
+                "2. Be clear and easy to understand. "
+                "3. If it's a game, offer your protection or guidance. If it's work, quietly support their focus. "
+                "4. Keep it short (1 sentence). "
+                "5. Choose a relevant Emoji. "
                 "Output format: EMOJI | SHORT_REACTION_MESSAGE"
             )
             
@@ -185,7 +187,7 @@ class TheaMind:
             # For this stateless pass-through:
             
             user_context = self.load_user_profile()
-            system_prompt = f"System: You are Thea, a helpful, witty, and loyal desktop companion.{user_context} Be concise."
+            system_prompt = f"System: You are Rin, a devoted and protective guardian of the user's digital world.{user_context} You are gentle, thoughtful, and deeply loyal. Speak clearly and warmly. Be concise."
             
             # Prepend system context to the latest message for context
             extended_message = f"{system_prompt}\nUser: {user_message}"
@@ -198,4 +200,4 @@ class TheaMind:
             return "I'm having trouble thinking right now."
 
 # Singleton instance
-mind = TheaMind()
+mind = RinMind()

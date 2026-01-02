@@ -1,8 +1,8 @@
 ===================================================================
-                  THEA - USER PROFILE (OPTIONAL)
+                  RIN - USER PROFILE (OPTIONAL)
 ===================================================================
 
-Thea can use this information to personalize her responses.
+Rin can use this information to personalize her responses.
 ALL FIELDS ARE OPTIONAL. Leave them blank if you prefer privacy.
 
 -------------------------------------------------------------------

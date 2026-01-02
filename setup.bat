@@ -1,6 +1,6 @@
 @echo off
 echo ==========================================
-echo      THEA - SYSTEM SETUP
+echo      RIN - SYSTEM SETUP
 echo ==========================================
 
 echo [1/3] Detecting Python...

@@ -1,5 +1,5 @@
 ===================================================================
-                  THEA - GEMINI API KEY SETUP
+                  RIN - GEMINI API KEY SETUP
 ===================================================================
 
 1. GET YOUR KEY: https://aistudio.google.com/app/apikey

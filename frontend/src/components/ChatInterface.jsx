@@ -81,7 +81,7 @@ export default function ChatInterface() {
                         fontSize: '14px',
                         color: 'rgba(255,255,255,0.9)'
                     }}>
-                        Chat with Thea
+                        Chat with Rin
                     </div>
 
                     {/* Messages */}
@@ -116,7 +116,7 @@ export default function ChatInterface() {
                         ))}
                         {isTyping && (
                             <div style={{ alignSelf: 'flex-start', color: 'rgba(255,255,255,0.5)', fontSize: '12px' }}>
-                                Thea is thinking...
+                                Rin is thinking...
                             </div>
                         )}
                         <div ref={messagesEndRef} />

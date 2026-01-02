@@ -36,7 +36,7 @@ last_trigger_time = 0
 
 @app.get("/")
 def read_root():
-    return {"status": "Thea Backend is running"}
+    return {"status": "Rin Backend is running"}
 
 @app.get("/health")
 def health_check():
@@ -116,7 +116,7 @@ async def chat_endpoint(msg: ChatMessage):
     # Pre-inject system persona
     formatted_history.append({
         "role": "model",
-        "parts": ["I am Thea, a helpful and curious desktop companion."]
+        "parts": ["I am Rin, a helpful and curious desktop companion."]
     })
     
     for mem in memories:
@@ -137,7 +137,7 @@ async def chat_endpoint(msg: ChatMessage):
     response_text = mind.chat_response(formatted_history, msg.message)
     
     # Record model response
-    database.add_memory("chat", f"Thea: {response_text}")
+    database.add_memory("chat", f"Rin: {response_text}")
     
     return {"response": response_text}
 

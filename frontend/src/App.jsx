@@ -59,7 +59,7 @@ function App() {
             overflow: 'hidden',
             position: 'relative'
         }}>
-            <h1 style={{ margin: '0 0 10px 0', fontSize: '24px', fontWeight: '300', letterSpacing: '1px' }}>THEA</h1>
+            <h1 style={{ margin: '0 0 10px 0', fontSize: '24px', fontWeight: '300', letterSpacing: '1px' }}>RIN</h1>
 
             {/* Status Bar */}
             <div style={{

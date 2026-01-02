@@ -1,6 +1,6 @@
 @echo off
 echo ==========================================
-echo      THEA - DIAGNOSTICS
+echo      RIN - DIAGNOSTICS
 echo ==========================================
 
 if not exist logs mkdir logs
