@@ -4,22 +4,43 @@ echo      RIN - SYSTEM SETUP
 echo ==========================================
 
 echo [1/3] Detecting Python...
+set CARBON_PYTHON=python
+
+:: Check if python exists
 python --version > nul 2>&1
-if not errorlevel 1 (
-    set CARBON_PYTHON=python
-    echo   - Found 'python' command.
-) else (
+if errorlevel 1 (
+    :: Try py launcher
     py --version > nul 2>&1
-    if not errorlevel 1 (
-        set CARBON_PYTHON=py
-        echo   - Found 'py' launcher.
-    ) else (
-        echo   ! CRITICAL: Python not found.
-        echo   ! Please run 'debug.bat' for troubleshooting instructions.
+if errorlevel 1 (
+        echo   ! Python not found. Launching installer...
+        call python_setup.bat
+        echo.
+        echo   ! Installation complete?
+        echo   ! Press any key to RESTART this setup script and detect the new version.
         pause
-        exit /b
+        start "" "%~f0"
+        exit
+    ) else (
+        set CARBON_PYTHON=py
     )
 )
+
+:: Check Version >= 3.10
+echo   - Checking Python version...
+%CARBON_PYTHON% -c "import sys; exit(0) if sys.version_info >= (3, 10) else exit(1)"
+if errorlevel 1 (
+    echo.
+    echo   ! Python Version Update Required.
+    echo   ! Launching installer for Python 3.11...
+    call python_setup.bat
+    echo.
+    echo   ! Installation complete?
+    echo   ! Press any key to RESTART this setup script and detect the new version.
+    pause
+    start "" "%~f0"
+    exit
+)
+echo   - Python 3.10+ detected.
 
 echo [2/3] Setting up Backend...
 cd backend
@@ -58,9 +79,11 @@ if errorlevel 1 (
     echo   ! Launching Node.js installer...
     call nodejs_setup.bat
     echo.
-    echo   ! Please restart 'setup.bat' after Node.js is installed and your terminal is restarted.
+    echo   ! Installation complete?
+    echo   ! Press any key to RESTART this setup script and detect the new version.
     pause
-    exit /b
+    start "" "%~f0"
+    exit
 )
 
 cd frontend
