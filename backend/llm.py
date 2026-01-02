@@ -1,148 +1,242 @@
-import google.generativeai as genai
 import os
 import time
+import abc
+import traceback
+from PIL import Image
+import io
+import re
 
-# Attempt to configure from environment or files
-API_KEY = os.environ.get("GEMINI_API_KEY")
+# Providers
+import google.generativeai as genai
+import ollama
 
-if not API_KEY:
-    # Try reading from file (Dev first, then User)
-    base_dir = os.path.join(os.path.dirname(__file__), "..")
-    files_to_check = ["GEMINI_API_KEY.dev.txt", "GEMINI_API_KEY.txt"]
-    
-    import re
-    for filename in files_to_check:
-        try:
-            path = os.path.join(base_dir, filename)
-            if os.path.exists(path):
-                with open(path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                    # Look for standard Google API Key pattern
-                    match = re.search(r"AIza[0-9A-Za-z-_]{35}", content)
-                    if match:
-                        API_KEY = match.group(0)
-                        print(f"Loaded API Key from {filename}")
-                        break
-        except Exception:
-            pass
+# ==============================================================================
+# ABSTRACT PROVIDER
+# ==============================================================================
+class AIProvider(abc.ABC):
+    @abc.abstractmethod
+    def is_active(self):
+        pass
 
-if API_KEY:
-    genai.configure(api_key=API_KEY)
+    @abc.abstractmethod
+    def analyze_image(self, image_bytes, user_context):
+        """Returns { "reaction": "Emoji", "description": "Text" }"""
+        pass
 
-class TheaMind:
+    @abc.abstractmethod
+    def chat_response(self, history, user_message, user_context):
+        """Returns text response string"""
+        pass
+
+# ==============================================================================
+# GEMINI PROVIDER (CLOUD)
+# ==============================================================================
+class GeminiProvider(AIProvider):
     def __init__(self):
         self.model = None
-        if API_KEY:
-            # Use the latest vision-capable model
-            self.model = genai.GenerativeModel('gemini-flash-latest')
-        
+        self.api_key = self._load_api_key()
+        if self.api_key:
+            try:
+                genai.configure(api_key=self.api_key)
+                self.model = genai.GenerativeModel('gemini-flash-latest')
+                print("Gemini Provider Initialized.")
+            except Exception as e:
+                print(f"Gemini Init Error: {e}")
+
+    def _load_api_key(self):
+        key = os.environ.get("GEMINI_API_KEY")
+        if not key:
+            # File fallback
+            base_dir = os.path.join(os.path.dirname(__file__), "..")
+            for fname in ["GEMINI_API_KEY.dev.txt", "GEMINI_API_KEY.txt"]:
+                try:
+                    path = os.path.join(base_dir, fname)
+                    if os.path.exists(path):
+                        with open(path, "r", encoding="utf-8") as f:
+                            match = re.search(r"AIza[0-9A-Za-z-_]{35}", f.read())
+                            if match: return match.group(0)
+                except: pass
+        return key
+
     def is_active(self):
         return self.model is not None
 
-
-    def load_user_profile(self):
-        """Reads user_profile.txt (or .dev.txt) and returns a context string."""
-        profile = {}
-        base_dir = os.path.join(os.path.dirname(__file__), "..")
-        files_to_check = ["user_profile.dev.txt", "user_profile.txt"]
+    def analyze_image(self, image_bytes, user_context):
+        if not self.model: return self._error("No API Key")
         
         try:
-            for filename in files_to_check:
-                path = os.path.join(base_dir, filename)
+            image = Image.open(io.BytesIO(image_bytes))
+            prompt = (
+                f"You are Thea, a witty digital companion.{user_context} "
+                "Look at this screen. "
+                "1. REACT to it like a friend. "
+                "2. Do NOT just describe it. Speak TO the user. "
+                "3. Keep it short (1 sentence). "
+                "4. Choose a relevant Emoji. "
+                "Output: EMOJI | REACTION"
+            )
+            response = self.model.generate_content([prompt, image])
+            return self._parse_reaction(response.text)
+        except Exception as e:
+            self._log_error(e)
+            return self._error("Vision Error")
+
+    def chat_response(self, history, user_message, user_context):
+        if not self.model: return "I need a GEMINI_API_KEY to speak."
+        
+        try:
+            system = f"System: You are Thea, a witty companion.{user_context} Be concise."
+            chat = self.model.start_chat(history=history or [])
+            response = chat.send_message(f"{system}\nUser: {user_message}")
+            return response.text
+        except Exception as e:
+            print(f"Chat Error: {e}")
+            return "I'm having trouble connecting to Google."
+
+    def _parse_reaction(self, text):
+        text = text.strip()
+        if "|" in text:
+            parts = text.split("|", 1)
+            return {"reaction": parts[0].strip(), "description": parts[1].strip()}
+        return {"reaction": "👀", "description": text}
+
+    def _error(self, msg):
+        return {"reaction": "😵", "description": msg}
+
+    def _log_error(self, e):
+        try:
+            log_path = os.path.join(os.path.dirname(__file__), "..", "logs", "error.log")
+            with open(log_path, "a") as f:
+                f.write(f"\n[{time.ctime()}] Gemini Error: {str(e)}\n{traceback.format_exc()}")
+        except: pass
+
+# ==============================================================================
+# OLLAMA PROVIDER (LOCAL)
+# ==============================================================================
+class OllamaProvider(AIProvider):
+    def __init__(self):
+        self.model_name = "llama3.2-vision" # Default try
+        self.active = False
+        try:
+            # Check availability
+            ollama.list()
+            self.active = True
+            print(f"Ollama Provider Initialized (Targeting {self.model_name})")
+        except Exception as e:
+            print(f"Ollama Init Failed (Is it running?): {e}")
+
+    def is_active(self):
+        return self.active
+
+    def analyze_image(self, image_bytes, user_context):
+        if not self.active: return {"reaction": "🔌", "description": "Ollama is not running."}
+        
+        try:
+            # Ollama Python client takes path or bytes? 
+            # Actually simplest is to write temp file or pass base64 if supported.
+            # The library supports 'images': [bytes]
+            
+            prompt = (
+                f"You are Thea.{user_context} "
+                "React to this screen. Short sentence. Emoji."
+                "Format: EMOJI | REACTION"
+            )
+            
+            response = ollama.chat(model=self.model_name, messages=[
+                {
+                    'role': 'user',
+                    'content': prompt,
+                    'images': [image_bytes]
+                }
+            ])
+            return self._parse_reaction(response['message']['content'])
+        except Exception as e:
+            print(f"Ollama Vision Error: {e}")
+            return {"reaction": "😵", "description": "I can't see clearly (Ollama Error)."}
+
+    def chat_response(self, history, user_message, user_context):
+        if not self.active: return "Ollama is offline."
+        
+        try:
+            # Convert history to Ollama format if needed (list of dicts is standard)
+            msgs = []
+            if history:
+                msgs = history # Assuming compatible structure
+            
+            msgs.append({'role': 'system', 'content': f"You are Thea.{user_context} Be concise."})
+            msgs.append({'role': 'user', 'content': user_message})
+            
+            response = ollama.chat(model=self.model_name, messages=msgs)
+            return response['message']['content']
+        except Exception as e:
+            return f"Ollama Error: {e}"
+
+    def _parse_reaction(self, text):
+        # Same parsing logic
+        text = text.strip()
+        if "|" in text:
+            parts = text.split("|", 1)
+            return {"reaction": parts[0].strip(), "description": parts[1].strip()}
+        return {"reaction": "🤖", "description": text}
+
+# ==============================================================================
+# MAIN BRAIN CLASS
+# ==============================================================================
+class TheaMind:
+    def __init__(self):
+        self.gemini = GeminiProvider()
+        self.ollama = OllamaProvider()
+        self.provider = None
+        
+        # Load profile to check preference
+        self.profile = self.load_user_profile_data()
+        self._select_provider()
+
+    def load_user_profile_data(self):
+        profile = {}
+        base_dir = os.path.join(os.path.dirname(__file__), "..")
+        for fname in ["user_profile.dev.txt", "user_profile.txt"]:
+            try:
+                path = os.path.join(base_dir, fname)
                 if os.path.exists(path):
                     with open(path, "r", encoding="utf-8") as f:
                         for line in f:
                             if "=" in line and not line.strip().startswith("#"):
-                                key, val = line.strip().split("=", 1)
-                                if val.strip():
-                                    profile[key.strip()] = val.strip()
-                    # If we found and loaded a file (even if empty keys), stop looking
+                                k, v = line.strip().split("=", 1)
+                                if v.strip(): profile[k.strip()] = v.strip()
                     break
-        except Exception:
-            pass
+            except: pass
+        return profile
+
+    def load_user_context_string(self):
+        p = self.load_user_profile_data() # Reload freshness
+        ctx = ""
+        if p.get("Username"): ctx += f" User: {p['Username']}."
+        if p.get("DateOfBirth"): ctx += f" Birthday: {p['DateOfBirth']}."
+        if p.get("Interests"): ctx += f" Interests: {p['Interests']}."
+        return ctx
+
+    def _select_provider(self):
+        pref = self.profile.get("AIProvider", "Auto").lower()
         
-        context = ""
-        if profile.get("Username"):
-            context += f" User's name is {profile['Username']}."
-        if profile.get("DateOfBirth"):
-            context += f" User's birthday is {profile['DateOfBirth']}."
-        if profile.get("Interests"):
-            context += f" User likes: {profile['Interests']}."
-        if profile.get("Dislikes"):
-            context += f" User dislikes: {profile['Dislikes']}."
+        if pref == "local" or pref == "ollama":
+            self.provider = self.ollama
+        elif pref == "cloud" or pref == "gemini":
+            self.provider = self.gemini
+        else:
+            # Auto: Prefer Local if Active, else Gemini
+            if self.ollama.is_active():
+                self.provider = self.ollama
+            else:
+                self.provider = self.gemini
         
-        return context
+        print(f"Selected AI Provider: {self.provider.__class__.__name__}")
 
     def analyze_image(self, image_bytes):
-        """
-        Analyzes an image and returns a short reaction and description.
-        Returns: { "reaction": "Emoji", "description": "Text" }
-        """
-        if not self.model:
-            return {"reaction": "😴", "description": "I need a GEMINI_API_KEY to see."}
-
-        try:
-            # Prepare image for Gemini (assuming BytesIO or similar)
-            from PIL import Image
-            import io
-            image = Image.open(io.BytesIO(image_bytes))
-
-            user_context = self.load_user_profile()
-
-            prompt = (
-                f"You are Thea, a witty and observant digital desktop companion.{user_context} "
-                "Look at the user's screen. "
-                "1. REACT to it like a friend sitting next to them. If it's a game, comment on the action. If it's code, cheer them on or make a joke. "
-                "2. Do NOT just describe the screen (e.g. don't say 'The user is playing...'). Speak TO the user. "
-                "3. Keep it short (1 sentence). "
-                "4. Choose a relevant Emoji. "
-                "Output format: EMOJI | SHORT_REACTION_MESSAGE"
-            )
-            
-            response = self.model.generate_content([prompt, image])
-            text = response.text.strip()
-            
-            if "|" in text:
-                parts = text.split("|", 1)
-                return {"reaction": parts[0].strip(), "description": parts[1].strip()}
-            else:
-                return {"reaction": "👀", "description": text}
-
-        except Exception as e:
-            import traceback
-            log_path = os.path.join(os.path.dirname(__file__), "..", "logs", "error.log")
-            with open(log_path, "a") as f:
-                f.write(f"\n[{time.ctime()}] Image Error: {str(e)}\n")
-                f.write(traceback.format_exc())
-            print(f"Error analyzing image: {e}")
-            return {"reaction": "😵", "description": "My vision blurred for a second."}
+        return self.provider.analyze_image(image_bytes, self.load_user_context_string())
 
     def chat_response(self, history, user_message):
-        """
-        Generates a chat response based on conversation history.
-        History format: list of {"role": "user"/"model", "parts": ["text"]}
-        """
-        if not self.model:
-            return "I need a GEMINI_API_KEY to speak properly."
+        return self.provider.chat_response(history, user_message, self.load_user_context_string())
 
-        try:
-            # Update system instruction in history if possible, or just append context
-            # Gemini Python SDK handles history statefully, but here we pass 'history' list manually.
-            # We'll inject context into the last message or system prompt if we controlled the session better.
-            # For this stateless pass-through:
-            
-            user_context = self.load_user_profile()
-            system_prompt = f"System: You are Thea, a helpful, witty, and loyal desktop companion.{user_context} Be concise."
-            
-            # Prepend system context to the latest message for context
-            extended_message = f"{system_prompt}\nUser: {user_message}"
-            
-            chat = self.model.start_chat(history=history)
-            response = chat.send_message(extended_message)
-            return response.text
-        except Exception as e:
-            print(f"Error in chat: {e}")
-            return "I'm having trouble thinking right now."
-
-# Singleton instance
+# Singleton
 mind = TheaMind()

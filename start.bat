@@ -17,6 +17,13 @@ if not exist frontend\node_modules (
     exit /b
 )
 
+echo Checking Local AI Model...
+where ollama >nul 2>nul
+if %ERRORLEVEL% EQU 0 (
+    echo   - Ensuring 'llama3.2-vision' is available...
+    ollama pull llama3.2-vision
+)
+
 echo Starting Backend...
 start "Edge Backend" /min cmd /k "cd backend && venv\Scripts\python.exe -m uvicorn main:app --reload"
 
