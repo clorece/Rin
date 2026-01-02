@@ -1,0 +1,28 @@
+# Backend
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.DS_Store
+
+# Logs & Temp
+logs/
+*.log
+
+# User Data & Memory (Privacy)
+data/
+memory/
+db/
+*.db
+*.sqlite
+*.json
+!package.json
+!tsconfig.json
+
+# Editor
+.vscode/
+.idea/

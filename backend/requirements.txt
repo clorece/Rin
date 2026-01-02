@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+python-multipart
+requests
+Pillow
+pywin32
+mss
