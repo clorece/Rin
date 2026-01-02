@@ -48,8 +48,10 @@ async def get_screen_capture(analyze: bool = False):
     """
     global last_analysis_time
     
-    title = get_active_window_title()
-    image_b64 = capture_screen_base64(scale=0.5)
+    title = get_active_window_title() # Fast enough to keep sync usually, but could thread if needed
+    
+    # Offload screen capture to thread to ensure loop never hiccups
+    image_b64 = await asyncio.to_thread(capture_screen_base64, scale=0.5)
     
     # Simple rate limiting for passive analysis (at most once every 10 seconds)
     import time
@@ -67,7 +69,9 @@ async def process_observation(window_title, image_b64):
     """Background task to analyze screen and store memory."""
     try:
         image_bytes = base64.b64decode(image_b64)
-        result = mind.analyze_image(image_bytes)
+        
+        # Heavy blocking call offloaded to thread
+        result = await asyncio.to_thread(mind.analyze_image, image_bytes)
         
         # Store in DB
         content = f"User is processing: {window_title}. Observation: {result['description']}"
@@ -114,8 +118,8 @@ async def chat_endpoint(msg: ChatMessage):
     # Record user message
     database.add_memory("chat", f"User: {msg.message}")
     
-    # Generate response
-    response_text = mind.chat_response(formatted_history, msg.message)
+    # Generate response (Heavy blocking call offloaded)
+    response_text = await asyncio.to_thread(mind.chat_response, formatted_history, msg.message)
     
     # Record model response
     database.add_memory("chat", f"Thea: {response_text}")
