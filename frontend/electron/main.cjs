@@ -64,3 +64,14 @@ app.on('window-all-closed', () => {
         app.quit();
     }
 });
+
+// Cleanup backend when app quits
+app.on('before-quit', () => {
+    try {
+        // Kill all Python processes (uvicorn spawns multiple)
+        const { execSync } = require('child_process');
+        execSync('taskkill /F /IM python.exe 2>nul', { stdio: 'ignore' });
+    } catch (e) {
+        // Ignore - processes might already be dead
+    }
+});

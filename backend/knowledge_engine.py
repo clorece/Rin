@@ -1,0 +1,234 @@
+"""
+Knowledge Engine for Rin's learning system.
+Uses Gemini to extract knowledge from observations and build understanding of the user.
+"""
+
+import hashlib
+import database
+from typing import Optional
+from datetime import datetime
+
+
+class KnowledgeEngine:
+    """
+    Extracts and manages knowledge about the user.
+    Uses Gemini to analyze observations and build understanding.
+    """
+    
+    def __init__(self):
+        self._last_analysis = None
+        self._analysis_interval = 60  # Seconds between deep analyses
+    
+    def process_observation(self, window_title: str, app_name: str, 
+                           app_category: str, description: str) -> dict:
+        """
+        Process an observation and extract learnable knowledge.
+        Called after Gemini analyzes a screen.
+        
+        Returns: { "learned": bool, "new_context": bool, "insight": str|None }
+        """
+        result = {
+            "learned": False,
+            "new_context": False,
+            "insight": None
+        }
+        
+        # Generate context hash
+        context_hash = self._hash_context(window_title, app_name)
+        
+        # Check if we've seen this context before
+        existing = database.find_similar_context(window_title, app_name)
+        
+        if existing:
+            # Update occurrence count
+            database.store_context_embedding(
+                context_hash=context_hash,
+                window_title=window_title,
+                app_name=app_name,
+                app_category=app_category,
+                description=description
+            )
+        else:
+            # New context - store it
+            database.store_context_embedding(
+                context_hash=context_hash,
+                window_title=window_title,
+                app_name=app_name,
+                app_category=app_category,
+                description=description
+            )
+            result["new_context"] = True
+        
+        # Extract knowledge from the observation
+        knowledge_extracted = self._extract_knowledge(
+            window_title, app_name, app_category, description
+        )
+        
+        if knowledge_extracted:
+            result["learned"] = True
+        
+        return result
+    
+    def _hash_context(self, window_title: str, app_name: str) -> str:
+        """Generate a hash for a context."""
+        content = f"{app_name}:{window_title}"
+        return hashlib.md5(content.encode()).hexdigest()[:16]
+    
+    def _extract_knowledge(self, window_title: str, app_name: str, 
+                          app_category: str, description: str) -> bool:
+        """Extract learnable knowledge from an observation."""
+        learned_something = False
+        
+        # Learn about interests from window titles
+        interests = self._detect_interests(window_title, description)
+        for interest in interests:
+            database.learn_about_user(
+                category="interest",
+                key=interest["key"],
+                value=interest["value"],
+                confidence=interest.get("confidence", 0.5)
+            )
+            learned_something = True
+        
+        # Learn about workflows from app category patterns
+        if app_category:
+            database.learn_about_user(
+                category="app_usage",
+                key=app_category,
+                value=app_name,
+                confidence=0.3  # Low initial confidence, grows with repetition
+            )
+            learned_something = True
+        
+        return learned_something
+    
+    def _detect_interests(self, window_title: str, description: str) -> list:
+        """Detect user interests from window title and description."""
+        interests = []
+        title_lower = window_title.lower() if window_title else ""
+        desc_lower = description.lower() if description else ""
+        
+        # Game development
+        if any(x in title_lower for x in ["unreal", "unity", "godot", "game dev"]):
+            interests.append({"key": "game_development", "value": "unreal/unity/godot", "confidence": 0.7})
+        
+        # Programming languages/frameworks
+        if any(x in title_lower for x in ["python", "javascript", "typescript", "react", "next.js"]):
+            interests.append({"key": "programming", "value": "web development", "confidence": 0.6})
+        
+        # Shader/graphics
+        if any(x in title_lower for x in ["shader", "glsl", "hlsl", "graphics"]):
+            interests.append({"key": "graphics_programming", "value": "shaders", "confidence": 0.7})
+        
+        # Gaming
+        if any(x in title_lower for x in ["steam", "discord", "valorant", "genshin"]):
+            interests.append({"key": "gaming", "value": "games", "confidence": 0.5})
+        
+        # AI/ML
+        if any(x in title_lower for x in ["gemini", "ollama", "ai", "llm", "machine learning"]):
+            interests.append({"key": "ai_ml", "value": "AI/ML development", "confidence": 0.6})
+        
+        return interests
+    
+    def generate_proactive_insight(self) -> Optional[dict]:
+        """
+        Generate a proactive insight based on accumulated knowledge.
+        Called periodically to see if Rin has something to share.
+        
+        Returns: { "type": str, "message": str, "id": int } or None
+        """
+        # First, check for unshared insights
+        unshared = database.get_unshared_insights(min_relevance=0.6, limit=1)
+        if unshared:
+            insight = unshared[0]
+            return {
+                "type": insight["insight_type"],
+                "message": insight["content"],
+                "id": insight["id"]
+            }
+        
+        # Generate new insights from knowledge
+        insight = self._generate_insight_from_knowledge()
+        if insight:
+            insight_id = database.add_rin_insight(
+                insight_type=insight["type"],
+                content=insight["message"],
+                context=insight.get("context"),
+                relevance_score=insight.get("relevance", 0.6)
+            )
+            return {
+                "type": insight["type"],
+                "message": insight["message"],
+                "id": insight_id
+            }
+        
+        return None
+    
+    def _generate_insight_from_knowledge(self) -> Optional[dict]:
+        """Generate an insight from accumulated user knowledge."""
+        knowledge = database.get_user_knowledge(min_confidence=0.6)
+        
+        if not knowledge:
+            return None
+        
+        # Check for high-confidence interests
+        interests = [k for k in knowledge if k["category"] == "interest"]
+        if interests:
+            top_interest = interests[0]
+            if top_interest["evidence_count"] >= 5:  # Only share well-established insights
+                return {
+                    "type": "observation",
+                    "message": f"I've noticed you're quite interested in {top_interest['value']}.",
+                    "context": {"knowledge_id": top_interest["id"]},
+                    "relevance": 0.7
+                }
+        
+        # Check for app usage patterns
+        app_usage = [k for k in knowledge if k["category"] == "app_usage"]
+        if len(app_usage) >= 3:
+            categories = [k["key"] for k in app_usage[:3]]
+            return {
+                "type": "pattern",
+                "message": f"Your main focus areas seem to be: {', '.join(categories)}.",
+                "context": {"categories": categories},
+                "relevance": 0.6
+            }
+        
+        return None
+    
+    def get_context_for_llm(self) -> str:
+        """
+        Generate a context string about the user for LLM prompts.
+        This helps Rin personalize her responses.
+        """
+        parts = []
+        
+        # Get high-confidence knowledge
+        knowledge = database.get_user_knowledge(min_confidence=0.5)
+        
+        # Interests
+        interests = [k for k in knowledge if k["category"] == "interest"]
+        if interests:
+            interest_values = [k["value"] for k in interests[:3]]
+            parts.append(f"User interests: {', '.join(interest_values)}")
+        
+        # App usage patterns
+        app_usage = [k for k in knowledge if k["category"] == "app_usage"]
+        if app_usage:
+            categories = list(set(k["key"] for k in app_usage[:5]))
+            parts.append(f"User focuses on: {', '.join(categories)}")
+        
+        # Knowledge summary
+        summary = database.get_knowledge_summary()
+        if summary["contexts_learned"]["unique"] > 0:
+            parts.append(f"Contexts observed: {summary['contexts_learned']['unique']}")
+        
+        return " | ".join(parts) if parts else ""
+    
+    def mark_insight_delivered(self, insight_id: int, feedback: str = None):
+        """Mark an insight as delivered to the user."""
+        database.mark_insight_shared(insight_id, feedback)
+
+
+# Singleton instance
+knowledge_engine = KnowledgeEngine()

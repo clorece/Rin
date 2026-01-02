@@ -13,12 +13,16 @@ app.add_middleware(
 )
 
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import base64
 import asyncio
 import database
 from llm import mind
 from capture import capture_screen_base64, get_active_window_title
+from activity_tracker import activity_collector
+from pattern_engine import pattern_engine
+from learning_config import get_config, update_config
+from knowledge_engine import knowledge_engine
 
 # -- Data Models --
 class ChatMessage(BaseModel):
@@ -26,6 +30,12 @@ class ChatMessage(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
+
+class LearningConfigUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    track_files: Optional[bool] = None
+    track_apps: Optional[bool] = None
+    share_insights: Optional[bool] = None
 
 # -- State --
 # We keep a simple in-memory queue for immediate reactions to send to frontend
@@ -36,13 +46,26 @@ last_trigger_time = 0
 last_seen_image = None
 last_screen_change_time = 0
 
+# -- Lifecycle Events --
+@app.on_event("startup")
+async def startup_event():
+    """Start background services on app startup."""
+    print("[Startup] Starting activity collector...")
+    activity_collector.start()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Clean up on app shutdown."""
+    print("[Shutdown] Stopping activity collector...")
+    activity_collector.stop()
+
 @app.get("/")
 def read_root():
-    return {"status": "Rin Backend is running"}
+    return {"status": "Rin Backend is running", "learning": activity_collector.is_running()}
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok"}
+    return {"status": "ok", "learning_active": activity_collector.is_running()}
 
 @app.get("/capture")
 async def get_screen_capture(analyze: bool = False):
@@ -93,6 +116,27 @@ async def process_observation(window_title, image_b64):
         # Store in DB
         content = f"User is processing: {window_title}. Observation: {result['description']}"
         database.add_memory("observation", content, meta={"image_path": "todo", "reaction": result['reaction']})
+        
+        # Feed observation to knowledge engine for learning
+        app_name = capture_screen_base64.__module__  # Placeholder - get actual app name
+        try:
+            from activity_tracker import AppTracker
+            tracker = AppTracker()
+            app_name, _ = tracker._get_active_window_info()
+            app_category = tracker._categorize_app(app_name or "", window_title or "")
+        except:
+            app_name = "unknown"
+            app_category = "other"
+        
+        knowledge_result = knowledge_engine.process_observation(
+            window_title=window_title or "",
+            app_name=app_name or "",
+            app_category=app_category,
+            description=result['description']
+        )
+        
+        if knowledge_result.get("learned"):
+            print(f"[Knowledge] Learned from observation")
         
         print(f"Analysis: {result}")
         
@@ -156,8 +200,88 @@ def shutdown_server():
     import os
     import signal
     print("Shutting down backend...")
+    activity_collector.stop()
     os.kill(os.getpid(), signal.SIGTERM)
     return {"status": "shutting_down"}
+
+
+# ============== Activity & Learning Endpoints ==============
+
+@app.get("/activity/stats")
+def get_activity_stats(days: int = 7):
+    """Get activity statistics for the past N days."""
+    return {
+        "apps": database.get_app_activity_stats(days=days),
+        "files": database.get_file_activity_stats(days=days)
+    }
+
+@app.get("/activity/insights")
+def get_activity_insights():
+    """Get Rin's learned insights about user patterns."""
+    insights = pattern_engine.get_insights_for_rin(max_insights=5)
+    return {
+        "insights": insights,
+        "context": pattern_engine.get_context_for_response()
+    }
+
+@app.get("/activity/patterns")
+def get_learned_patterns(pattern_type: Optional[str] = None, min_confidence: float = 0.0):
+    """Get learned patterns from the database."""
+    patterns = database.get_patterns(pattern_type=pattern_type, min_confidence=min_confidence)
+    return {"patterns": patterns}
+
+@app.get("/activity/config")
+def get_learning_config():
+    """Get current learning configuration."""
+    return get_config()
+
+@app.post("/activity/config")
+def update_learning_config(config_update: LearningConfigUpdate):
+    """Update learning configuration."""
+    updates = {k: v for k, v in config_update.dict().items() if v is not None}
+    if updates:
+        new_config = update_config(updates)
+        return {"status": "updated", "config": new_config}
+    return {"status": "no_changes", "config": get_config()}
+
+
+# ============== Knowledge Graph Endpoints ==============
+
+@app.get("/knowledge/summary")
+def get_knowledge_summary():
+    """Get a summary of what Rin knows about the user."""
+    return database.get_knowledge_summary()
+
+@app.get("/knowledge/user")
+def get_user_knowledge(category: Optional[str] = None, min_confidence: float = 0.0):
+    """Get knowledge Rin has learned about the user."""
+    knowledge = database.get_user_knowledge(category=category, min_confidence=min_confidence)
+    return {"knowledge": knowledge, "count": len(knowledge)}
+
+@app.get("/knowledge/insights")
+def get_rin_insights():
+    """Get Rin's generated insights."""
+    unshared = database.get_unshared_insights(min_relevance=0.5, limit=10)
+    return {"insights": unshared, "count": len(unshared)}
+
+@app.get("/knowledge/proactive")
+def get_proactive_insight():
+    """Get a proactive insight Rin wants to share."""
+    insight = knowledge_engine.generate_proactive_insight()
+    if insight:
+        return {"has_insight": True, **insight}
+    return {"has_insight": False}
+
+@app.post("/knowledge/insight/{insight_id}/feedback")
+def submit_insight_feedback(insight_id: int, feedback: str = "acknowledged"):
+    """Submit feedback on an insight."""
+    knowledge_engine.mark_insight_delivered(insight_id, feedback)
+    return {"status": "ok"}
+
+@app.get("/knowledge/context")
+def get_knowledge_context():
+    """Get knowledge context string for LLM prompts."""
+    return {"context": knowledge_engine.get_context_for_llm()}
 
 if __name__ == "__main__":
     import uvicorn
