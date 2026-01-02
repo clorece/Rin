@@ -192,5 +192,103 @@ class RinMind:
             print(f"Error in chat: {e}")
             return "I'm having trouble thinking right now."
 
+    async def analyze_for_learning(self, image_bytes, window_title: str, 
+                                   recent_contexts: list = None) -> dict:
+        """
+        Analyzes an observation specifically for learning.
+        Asks Gemini to evaluate:
+        - Is this context meaningfully different from recent ones?
+        - What can be learned about the user?
+        - Should Rin share a proactive insight?
+        
+        Returns: {
+            "is_new_context": bool,
+            "learning": str or None,
+            "learning_category": str or None,  # interest, workflow, habit
+            "proactive_message": str or None,
+            "confidence": float
+        }
+        """
+        if not self.model:
+            return {
+                "is_new_context": False,
+                "learning": None,
+                "learning_category": None,
+                "proactive_message": None,
+                "confidence": 0.0
+            }
+
+        try:
+            from PIL import Image
+            import io
+            import json
+            
+            image = Image.open(io.BytesIO(image_bytes))
+            user_context = self.load_user_profile()
+            
+            # Format recent contexts for comparison
+            context_summary = ""
+            if recent_contexts:
+                context_list = [f"- {c.get('window_title', 'Unknown')}" for c in recent_contexts[:5]]
+                context_summary = f"Recent contexts I've seen:\n" + "\n".join(context_list)
+            
+            prompt = f"""You are Rin, building your understanding of the user.{user_context}
+
+Current window: {window_title}
+{context_summary}
+
+Analyze this screen and answer:
+
+1. IS_NEW: Is this meaningfully different from recent contexts? (true/false)
+2. LEARNING: What can I learn about the user from this? (one short insight, or null if nothing notable)
+3. CATEGORY: If there's a learning, what category? (interest, workflow, habit, preference, or null)
+4. PROACTIVE: Should I share an observation with the user now? If yes, write a gentle 1-sentence message. If not, null.
+5. CONFIDENCE: How confident am I in these assessments? (0.0 to 1.0)
+
+Respond ONLY with valid JSON in this exact format:
+{{"is_new": true, "learning": "User is interested in game development", "category": "interest", "proactive": null, "confidence": 0.7}}
+"""
+            
+            response = await self.model.generate_content_async([prompt, image])
+            text = response.text.strip()
+            
+            # Parse JSON response
+            # Handle potential markdown code blocks
+            if text.startswith("```"):
+                text = text.split("```")[1]
+                if text.startswith("json"):
+                    text = text[4:]
+            text = text.strip()
+            
+            try:
+                data = json.loads(text)
+                return {
+                    "is_new_context": data.get("is_new", False),
+                    "learning": data.get("learning"),
+                    "learning_category": data.get("category"),
+                    "proactive_message": data.get("proactive"),
+                    "confidence": float(data.get("confidence", 0.5))
+                }
+            except json.JSONDecodeError:
+                print(f"[Learning] Failed to parse Gemini response: {text[:100]}")
+                return {
+                    "is_new_context": True,
+                    "learning": None,
+                    "learning_category": None,
+                    "proactive_message": None,
+                    "confidence": 0.3
+                }
+
+        except Exception as e:
+            print(f"Error in learning analysis: {e}")
+            return {
+                "is_new_context": False,
+                "learning": None,
+                "learning_category": None,
+                "proactive_message": None,
+                "confidence": 0.0
+            }
+
 # Singleton instance
 mind = RinMind()
+

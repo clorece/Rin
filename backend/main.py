@@ -117,17 +117,18 @@ async def process_observation(window_title, image_b64):
         content = f"User is processing: {window_title}. Observation: {result['description']}"
         database.add_memory("observation", content, meta={"image_path": "todo", "reaction": result['reaction']})
         
-        # Feed observation to knowledge engine for learning
-        app_name = capture_screen_base64.__module__  # Placeholder - get actual app name
+        # Get app info for learning
+        app_name = "unknown"
+        app_category = "other"
         try:
             from activity_tracker import AppTracker
             tracker = AppTracker()
             app_name, _ = tracker._get_active_window_info()
             app_category = tracker._categorize_app(app_name or "", window_title or "")
         except:
-            app_name = "unknown"
-            app_category = "other"
+            pass
         
+        # Rule-based knowledge extraction (Phase 2A)
         knowledge_result = knowledge_engine.process_observation(
             window_title=window_title or "",
             app_name=app_name or "",
@@ -136,7 +137,32 @@ async def process_observation(window_title, image_b64):
         )
         
         if knowledge_result.get("learned"):
-            print(f"[Knowledge] Learned from observation")
+            print(f"[Knowledge] Rule-based learning extracted")
+        
+        # Vision-based Gemini learning (Phase 2B) - runs less frequently
+        # Only run deep learning analysis every 10 observations to save API calls
+        import random
+        if random.random() < 0.1:  # 10% of observations get deep analysis
+            try:
+                gemini_result = await knowledge_engine.process_observation_with_gemini(
+                    image_bytes=image_bytes,
+                    window_title=window_title or "",
+                    app_name=app_name or "",
+                    app_category=app_category
+                )
+                
+                if gemini_result.get("learned"):
+                    print(f"[Knowledge] Gemini insight: {gemini_result.get('insight')}")
+                
+                # If Gemini generated a proactive message, add it to reaction queue
+                if gemini_result.get("proactive"):
+                    reaction_queue.append({
+                        "type": "proactive",
+                        "content": "",
+                        "description": gemini_result["proactive"]
+                    })
+            except Exception as e:
+                print(f"[Knowledge] Gemini learning failed: {e}")
         
         print(f"Analysis: {result}")
         

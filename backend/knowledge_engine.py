@@ -69,6 +69,112 @@ class KnowledgeEngine:
         
         return result
     
+    async def process_observation_with_gemini(self, image_bytes, window_title: str,
+                                               app_name: str, app_category: str) -> dict:
+        """
+        Process an observation using Gemini for intelligent learning.
+        This is the Phase 2B vision-based approach.
+        
+        Returns: { "learned": bool, "new_context": bool, "insight": str|None, "proactive": str|None }
+        """
+        from llm import mind
+        
+        result = {
+            "learned": False,
+            "new_context": False,
+            "insight": None,
+            "proactive": None
+        }
+        
+        # Get recent contexts for comparison
+        recent_contexts = self._get_recent_contexts(limit=5)
+        
+        # Ask Gemini to analyze this observation for learning
+        learning_result = await mind.analyze_for_learning(
+            image_bytes=image_bytes,
+            window_title=window_title,
+            recent_contexts=recent_contexts
+        )
+        
+        # Process Gemini's learning response
+        if learning_result.get("is_new_context"):
+            result["new_context"] = True
+            
+            # Store context with Gemini's understanding
+            context_hash = self._hash_context(window_title, app_name)
+            database.store_context_embedding(
+                context_hash=context_hash,
+                window_title=window_title,
+                app_name=app_name,
+                app_category=app_category,
+                description=learning_result.get("learning") or ""
+            )
+        
+        # Store any learning Gemini extracted
+        if learning_result.get("learning") and learning_result.get("learning_category"):
+            category = learning_result["learning_category"]
+            learning = learning_result["learning"]
+            confidence = learning_result.get("confidence", 0.5)
+            
+            # Map category to our schema
+            if category in ["interest", "hobby"]:
+                database.learn_about_user(
+                    category="interest",
+                    key=learning[:30],  # Use first 30 chars as key
+                    value=learning,
+                    confidence=confidence
+                )
+            elif category in ["workflow", "habit"]:
+                database.learn_about_user(
+                    category="workflow",
+                    key=category,
+                    value=learning,
+                    confidence=confidence
+                )
+            elif category == "preference":
+                database.learn_about_user(
+                    category="preference",
+                    key=learning[:30],
+                    value=learning,
+                    confidence=confidence
+                )
+            
+            result["learned"] = True
+            result["insight"] = learning
+            print(f"[Knowledge] Gemini learned: {learning}")
+        
+        # Handle proactive insights from Gemini
+        if learning_result.get("proactive_message"):
+            proactive_msg = learning_result["proactive_message"]
+            confidence = learning_result.get("confidence", 0.5)
+            
+            # Store as a Rin insight
+            insight_id = database.add_rin_insight(
+                insight_type="proactive",
+                content=proactive_msg,
+                context={"window_title": window_title, "app": app_name},
+                relevance_score=confidence
+            )
+            
+            result["proactive"] = proactive_msg
+            print(f"[Knowledge] Gemini proactive: {proactive_msg}")
+        
+        return result
+    
+    def _get_recent_contexts(self, limit: int = 5) -> list:
+        """Get recently seen contexts for comparison."""
+        conn = database.get_db_connection()
+        c = conn.cursor()
+        c.execute("""
+            SELECT window_title, app_name, app_category, description
+            FROM context_embeddings
+            ORDER BY last_seen DESC
+            LIMIT ?
+        """, (limit,))
+        rows = c.fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+    
     def _hash_context(self, window_title: str, app_name: str) -> str:
         """Generate a hash for a context."""
         content = f"{app_name}:{window_title}"
