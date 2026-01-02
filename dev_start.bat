@@ -18,7 +18,7 @@ if not exist frontend\node_modules (
 )
 
 echo Starting Backend...
-start "Edge Backend" /min cmd /k "cd backend && venv\Scripts\python.exe -m uvicorn main:app --reload"
+start "Edge Backend" cmd /k "cd backend && venv\Scripts\python.exe -m uvicorn main:app --reload"
 
 echo Starting Frontend...
 echo If the window does not appear, or if you see errors, please run 'debug.bat'.

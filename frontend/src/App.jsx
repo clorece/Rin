@@ -12,6 +12,7 @@ function App() {
             const result = await checkHealth();
             if (result.status === 'ok') {
                 setStatus('System Online (Connected to Neural Core)');
+                setIsWatching(true);
             } else {
                 setStatus('Connection Failed: Neural Core Offline');
             }
