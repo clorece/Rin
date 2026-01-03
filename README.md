@@ -39,7 +39,7 @@ Rin is an intelligent, visually-aware desktop companion designed to quietly supp
 
 1.  **Clone the repository**:
     ```bash
-    git clone https://github.com/yourusername/rin.git
+    git clone https://github.com/clorece/rin.git
     cd rin
     ```
 
