@@ -272,6 +272,9 @@ async def process_observation(window_title, image_b64, trigger_type=None):
                     audio_bytes=audio_bytes
                 )
                 
+                # Debug: Log what the LLM returned for recommendation/proactive
+                log_activity("DEBUG", f"Gemini Keys: rec={gemini_result.get('recommendation') is not None}, proactive={gemini_result.get('proactive') is not None}")
+                
                 if gemini_result.get("learned"):
                     print(f"[Knowledge] Gemini insight: {gemini_result.get('insight')}")
                     log_activity("LEARNING", f"({gemini_result.get('learning_category', 'general')}): {gemini_result.get('insight')}")
