@@ -235,7 +235,7 @@ async def process_observation(window_title, image_b64, trigger_type=None):
         # Vision-based Gemini learning (Phase 2B) - runs less frequently
         # Only run deep learning analysis every 10 observations to save API calls
         import random
-        if random.random() < 0.1:  # 10% of observations get deep analysis
+        if random.random() < 0.3:  # 30% of observations get deep analysis
             try:
                 gemini_result = await knowledge_engine.process_observation_with_gemini(
                     image_bytes=image_bytes,
