@@ -476,9 +476,9 @@ Analyze this screen (and audio if provided) and answer:
    - If you hear game sounds, identify the game type and store it as an 'interest'.
 3. CATEGORY: If there's a learning, what category? (interest, workflow, habit, preference, or null)
 4. PROACTIVE: Should I share an observation with the user now? If yes, write a bubbly, supportive 1-sentence message matching the audio's vibe. If not, null.
-   - DEEP INSIGHTS: If the user is CODING, feel free to suggest a localized refactor or cleaner syntax (e.g., "Maybe try a list comprehension here?").
-   - If the user is WRITING, feel free to suggest a grammar fix or better phrasing.
-   - NOTE: Keep these suggestions OPTIONAL and POLITE ("You could trying doing X..."). Don't be bossy.
+   - DEEP INSIGHTS (PRIORITY): If the user is CODING, prefer making a specific code suggestion (e.g., "Maybe try a list comprehension here?") over a generic comment.
+   - If the user is WRITING, prefer suggesting a grammar fix or stronger phrasing.
+   - NOTE: Keep these suggestions OPTIONAL and POLITE ("You could try doing X..."). Don't be bossy.
 5. CONFIDENCE: How confident am I in these assessments? (0.0 to 1.0)
 
 Respond ONLY with valid JSON in this exact format:
