@@ -15,6 +15,7 @@ Rin is an intelligent, **visually and audio-aware** desktop companion designed t
 *   **Visual Awareness**: Rin "sees" your active window and understands what you are working on or playing.
 *   **Audio Awareness**: Rin "hears" system audio (music, game sounds) via loopback and uses it to understand the vibe.
 *   **Episodic Memory**: Rin remembers recent activities (e.g., "Back to coding?"), creating a continuous sense of companionship.
+*   **Continuous Learning**: Rin accumulates knowledge and memories from every session. The longer you use her, the smarter and more personalized her responses become.
 *   **Notification Center**: A dedicated, scrollable hub for Rin's observations and thoughts, separate from the chat.
 *   **Smart Idle System**:
     *   **Active (Green)**: Rin is watching and ready to chat.
@@ -128,7 +129,7 @@ If you encounter any bugs or issues, please report them via the **[GitHub Issues
     *   **`error.log`**: For crashes or critical errors (Most Important).
     *   **`backend.log`**: For general system status.
     *   **`api_usage.log`**: If the issue relates to Rin not seeing/hearing or API limits.
-    *   *(Note: Logs are auto-cleared on startup, so please reproduce the bug and then upload the logs immediately.)*
+    *   *(Note: Logs are auto-cleared on Rin's startup, so, if you have already restarted Rin before reading or uploading the logs, please reproduce the bug and then upload the logs immediately.)*
 4.  Include steps to reproduce the problem.
 
 ## Credits
