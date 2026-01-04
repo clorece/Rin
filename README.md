@@ -3,12 +3,12 @@
 > An edge intelligence companion for your personal computer.
 
 <div align="center">
-  <img src="frontend/src/assets/rin-pfp.jpg" alt="Image used for profile picture by daisukerichard on x! Please see credits below! " width="500"/>
+  <img src="frontend/src/assets/rin-pfp.jpg" alt="Rin Profile Picture" width="500"/>
+  <br>
+  <sub>Image used for profile picture by daisukerichard on x! Please see credits below!</sub>
 </div>
 
-<p align="center">Image used for profile picture by daisukerichard on x! Please see credits below!</p>
-
-Rin is an intelligent, visually-aware desktop companion designed to quietly support your digital life. She observes your screen, understands your context, and offers guidance or company when you need it.
+Rin is an intelligent, **visually and audio-aware** desktop companion designed to quietly support your digital life. She observes your screen, hears your system audio, and understands your context, offering guidance or company when you need it. **All your data and memories are stored locally on your machine**, ensuring your privacy and security.
 
 ## Features
 *   **Visual Awareness**: Rin "sees" your active window and understands what you are working on or playing.
@@ -55,6 +55,13 @@ Rin is an intelligent, visually-aware desktop companion designed to quietly supp
 *   **Dual Thinking Modes**: Real-time (45s) + Deep (Idle).
 *   **Cost-Conscious**: Drastic API reduction through buffering and significance checks.
 
+## Privacy & Security
+
+We take your privacy seriously. Rin is designed with a **Local-First** architecture:
+*   **Local Storage**: All screenshots, audio buffers, logs, and long-term memories are stored locally on your device (in the `database/` and `logs/` folders).
+*   **Cloud Processing**: Rin uses the Google Gemini API for analysis. Data sent to the API is subject to [Google's Generative AI Terms of Service](https://policies.google.com/terms). Please review their data use policies, especially regarding the difference between free and paid API tiers.
+*   **You Control the Data**: You can view, edit, or delete your profile and memory database at any time.
+
 ## Getting Started
 
 ### Prerequisites
@@ -86,6 +93,11 @@ Rin is an intelligent, visually-aware desktop companion designed to quietly supp
 3.  **Configure API Key**:
     *   Create a file named `GEMINI_API_KEY.txt` in the root directory.
     *   Paste your Gemini API key inside it.
+    
+    > **API Key & Usage Note:**
+    > *   **Free vs Paid:** You can absolutely use the **Free Tier** of the Gemini API. You are not forced to pay.
+    > *   **Rate Limits:** Be aware that the free tier has shorter rate limits (Requests Per Minute).
+    > *   **Future Optimization:** As seen in our [Roadmap](#roadmap--future-implementations-rins-thinking-system), we are actively implementing "Edge Thinking" features to **reduce API usage** significantly. By buffering observations and thinking locally, we aim to ensure a **responsive and efficient experience** while keeping API usage minimal.
 
 ### Usage
 
