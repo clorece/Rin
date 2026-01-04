@@ -1,7 +1,5 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import datetime
-import os
 
 app = FastAPI()
 
@@ -28,6 +26,7 @@ from pattern_engine import pattern_engine
 from learning_config import get_config, update_config
 from knowledge_engine import knowledge_engine
 from ears import ears
+from logger import log_activity, clear_activity_log
 
 # -- Data Models --
 class ChatMessage(BaseModel):
@@ -61,18 +60,22 @@ async def startup_event():
     import os
     try:
         log_dir = os.path.join(os.path.dirname(__file__), "..", "logs")
-        # Force create/clear activity.log and write header
-        activity_log = os.path.join(log_dir, "activity.log")
-        with open(activity_log, "w", encoding="utf-8") as f:
-             f.write(f"[{datetime.datetime.now()}] [SYSTEM] Session Started\n")
-             
-        # Clear others if they exist
-        for log_file in ["api_usage.log", "error.log"]:
+        # Ensure log dir exists
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+
+        # Clear specific logs but PRESERVE activity.log if possible, or append marker
+        # User reported "activity log empty", so let's append a session marker instead of clearing
+        for log_file in ["api_usage.log", "error.log", "backend.log"]:
             path = os.path.join(log_dir, log_file)
             if os.path.exists(path):
                 with open(path, "w") as f:
-                    f.write("")
-        print("[Startup] Logs initialized.")
+                    f.write("") # Truncate
+        
+        # Mark new session in activity log
+        log_activity("SYSTEM", "=== Rin Backend Started (Session Return) ===")
+
+        print("[Startup] Cleared api_usage.log and error.log")
     except Exception as e:
         print(f"[Startup] Failed to clear logs: {e}")
 
@@ -80,6 +83,9 @@ async def startup_event():
     activity_collector.start()
     print("[Startup] Starting ears (audio capture)...")
     ears.start()
+    
+    # Verify logging works
+    log_activity("SYSTEM", "Rin Backend Started - Logging Active")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -89,6 +95,9 @@ async def shutdown_event():
     print("[Shutdown] Stopping ears...")
     ears.stop()
 
+# Local log_activity removed in favor of logger module
+
+
 @app.get("/")
 def read_root():
     return {"status": "Rin Backend is running", "learning": activity_collector.is_running()}
@@ -96,25 +105,6 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "ok", "learning_active": activity_collector.is_running()}
-
-
-def log_activity(activity_type, content):
-    """
-    Logs unified activity to logs/activity.log.
-    """
-    import datetime
-    try:
-        log_dir = os.path.join(os.path.dirname(__file__), "..", "logs")
-        if not os.path.exists(log_dir):
-            os.makedirs(log_dir)
-            
-        log_path = os.path.join(log_dir, "activity.log")
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        with open(log_path, "a", encoding="utf-8") as f:
-            f.write(f"[{timestamp}] [{activity_type}] {content}\n")
-    except Exception as e:
-        print(f"Failed to log activity: {e}")
 
 
 def calculate_visual_difference(img_b64_1, img_b64_2):
@@ -261,9 +251,9 @@ async def process_observation(window_title, image_b64, trigger_type=None):
             print(f"[Knowledge] Rule-based learning extracted")
         
         # Vision-based Gemini learning (Phase 2B) - runs less frequently
-        # Only run deep learning analysis every 10 observations to save API calls
+        # Only run deep learning analysis every ~3 observations to save API calls
         import random
-        if random.random() < 0.3:  # 30% of observations get deep analysis
+        if random.random() < 0.4:  # 40% of observations get deep analysis (Bumped from 10%)
             try:
                 gemini_result = await knowledge_engine.process_observation_with_gemini(
                     image_bytes=image_bytes,
@@ -273,14 +263,11 @@ async def process_observation(window_title, image_b64, trigger_type=None):
                     audio_bytes=audio_bytes
                 )
                 
-                # Debug: Log what the LLM returned for recommendation/proactive
-                log_activity("DEBUG", f"Gemini Keys: rec={gemini_result.get('recommendation') is not None}, proactive={gemini_result.get('proactive') is not None}")
+                # if gemini_result.get("learned"):
+                #     # Silenced per user request (Recommendations Only)
+                #     pass
                 
-                if gemini_result.get("learned"):
-                    print(f"[Knowledge] Gemini insight: {gemini_result.get('insight')}")
-                    log_activity("LEARNING", f"({gemini_result.get('learning_category', 'general')}): {gemini_result.get('insight')}")
-                
-                # Handle Recommendations (High Priority - Bypass Staleness Check)
+                # Handle Recommendations (High Priority - The ONLY thing we listen to now)
                 # Add cooldown to prevent spam
                 import time as time_module
                 rec_content = gemini_result.get("recommendation")
@@ -293,53 +280,48 @@ async def process_observation(window_title, image_b64, trigger_type=None):
                     except NameError:
                         last_rec_time = 0
                     
-                    if time_module.time() - last_rec_time > 60:  # 60 second cooldown
+                    if time_module.time() - last_rec_time > 15:  # 15 second cooldown
                         last_recommendation_time = time_module.time()
+                        
+                        # 1. Send to Notification
                         reaction_queue.append({
                             "type": "recommendation",
                             "content": "💡",
                             "description": rec_content
                         })
+                        
+                        # 2. Add to Chat History (So user sees it in box)
+                        database.add_memory(
+                            memory_type="chat",
+                            content=rec_content,
+                            meta={"role": "model", "is_recommendation": True}
+                        )
+                        
+                        print(f"[Knowledge] Gemini recommendation: {rec_content}")
                         log_activity("RECOMMENDATION", f"{rec_content}")
                     else:
-                        log_activity("THROTTLED", f"Recommendation (Cooldown): {rec_content[:50]}...")
-
-                # Handle Proactive Comments (Low Priority - Check Staleness)
-                if gemini_result.get("proactive"):
-                    current_title = get_active_window_title()
-                    if current_title != window_title:
-                         print(f"[Knowledge] Comment skipped (Stale): {current_title} != {window_title}")
-                         log_activity("SKIPPED", f"Stale Comment: {gemini_result['proactive']}")
-                    else:
-                        reaction_queue.append({
-                            "type": "proactive",
-                            "content": "",
-                            "description": gemini_result["proactive"]
-                        })
-                        log_activity("INSIGHT", f"Proactive: {gemini_result['proactive']}")
+                        print(f"[Knowledge] Recommendation throttled (cooldown): {rec_content[:30]}...")
+                        log_activity("THROTTLED", f"Recommendation (Cooldown): {rec_content[:30]}...")
             except Exception as e:
                 print(f"[Knowledge] Gemini learning failed: {e}")
         
         print(f"Analysis: {result}")
         
-        # Add to reaction queue for frontend (Standard Reaction)
-        # Check staleness for this too to prevent leaks!
-        current_title_now = get_active_window_title()
-        if current_title_now == window_title:
-            reaction_queue.append({
-                "type": "reaction",
-                "content": result['reaction'],
-                "description": result['description']
-            })
-            log_activity("REACTION", result['description'])
-        else:
-            log_activity("SKIPPED", f"Stale Reaction: {result['description']}")
-            
-        log_activity("OBSERVATION", f"Window: {window_title} | App: {app_name}")
+        # Log the observation
+        log_activity("OBSERVATION", f"Window: {window_title}")
+        
+        # Add to reaction queue for frontend
+        reaction_queue.append({
+            "type": "reaction",
+            "content": result['reaction'],
+            "description": result['description']
+        })
+        
+        # Log the reaction
+        log_activity("REACTION", f"{result['description']}")
         
     except Exception as e:
         print(f"Analysis failed: {e}")
-        log_activity("ERROR", f"Analysis failed: {e}")
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(msg: ChatMessage):
@@ -378,17 +360,17 @@ async def chat_endpoint(msg: ChatMessage):
             print(f"[Chat] Including {len(audio_bytes)} bytes of audio context")
     
     # Generate response (with optional audio context)
-    reply_text = await mind.chat_response_async(formatted_history, msg.message, audio_bytes=audio_bytes)
+    response_text = await mind.chat_response_async(formatted_history, msg.message, audio_bytes=audio_bytes)
     
     # Record model response (full text)
-    database.add_memory("chat", f"Rin: {reply_text}")
+    database.add_memory("chat", f"Rin: {response_text}")
     
-    # Log Chat
+    # Log to activity log
     log_activity("CHAT", f"User: {msg.message}")
-    log_activity("CHAT", f"Rin: {reply_text}")
-
-    # Split for UI
-    chunks = split_into_chunks(reply_text, limit=200)
+    log_activity("CHAT", f"Rin: {response_text}")
+    
+    # Split for display
+    chunks = split_into_chunks(response_text, limit=200)
     
     # Queue extra chunks
     if len(chunks) > 1:
@@ -518,17 +500,6 @@ async def trigger_manual_insight(insight: ManualInsight):
         relevance_score=insight.relevance
     )
     return {"status": "created", "id": insight_id}
-
-@app.post("/knowledge/test/recommendation")
-def trigger_test_recommendation():
-    """Manually queue a test recommendation to verify UI."""
-    reaction_queue.append({
-        "type": "recommendation",
-        "content": "💡",
-        "description": "Test Recommendation: Try using a list comprehension here for better performance!"
-    })
-    log_activity("DEBUG", "Manually triggered test recommendation.")
-    return {"status": "queued"}
 
 @app.post("/knowledge/insight/{insight_id}/feedback")
 def submit_insight_feedback(insight_id: int, feedback: str = "acknowledged"):

@@ -7,6 +7,7 @@ import hashlib
 import database
 from typing import Optional
 from datetime import datetime
+from logger import log_activity
 
 
 class KnowledgeEngine:
@@ -144,50 +145,23 @@ class KnowledgeEngine:
             result["learned"] = True
             result["insight"] = learning
             print(f"[Knowledge] Gemini learned: {learning}")
+            log_activity("LEARNING", f"Learned {category}: {learning}")
         
-        # Debug: Print raw keys to verify what LLM sent
-        print(f"[Knowledge] Raw LLM Keys: {list(learning_result.keys())}")
-
-        # Handle Recommendations (High Priority)
+        # Handle proactive insights from Gemini
+        # Handle Recommendations (High Priority - The ONLY thing we listen to now)
         if learning_result.get("recommendation"):
             rec_msg = learning_result["recommendation"]
-            confidence = learning_result.get("confidence", 0.8) # Default high confidence for recs
+            confidence = learning_result.get("confidence", 0.8)
             
-            # Store
-            database.add_rin_insight(
-                insight_type="recommendation", # New type in DB meta if needed, or just mapped
-                content=rec_msg,
-                context={"window_title": window_title, "app": app_name},
-                relevance_score=confidence
-            )
+            # Store (DISABLED to prevent re-sending as insight)
+            # database.add_rin_insight(
+            #     insight_type="recommendation",
+            #     content=rec_msg,
+            #     context={"window_title": window_title, "app": app_name},
+            #     relevance_score=confidence
+            # )
             result["recommendation"] = rec_msg
             print(f"[Knowledge] Gemini recommendation: {rec_msg}")
-        
-        # Handle proactive insights from Gemini (Support both keys)
-        proactive_msg = learning_result.get("proactive") or learning_result.get("proactive_message")
-        if proactive_msg:
-            confidence = learning_result.get("confidence", 0.5)
-            
-            # Store as a Rin insight
-            insight_id = database.add_rin_insight(
-                insight_type="proactive",
-                content=proactive_msg,
-                context={"window_title": window_title, "app": app_name},
-                relevance_score=confidence
-            )
-            
-            result["proactive"] = proactive_msg
-            print(f"[Knowledge] Gemini proactive: {proactive_msg}")
-            
-            # Log Activity (Import here to avoid circular dependency if possible, or assume main has set it up)
-            # Since log_activity is in main, we can't easily import it without circular imports.
-            # Instead, we will rely on main.py to log the insight when it receives the return value.
-            # main.py line 253 already handles logging for Gemini proactive insights!
-            # So we only need to log 'Learnings' here if we want them, but main.py doesn't see those directly.
-            
-            # Actually, main.py logs the PROACTIVE insight.
-            # We should strictly log the LEARNING insight here if we want it recorded.
-            pass
         
         return result
     
@@ -276,12 +250,13 @@ class KnowledgeEngine:
         # First, check for unshared insights
         unshared = database.get_unshared_insights(min_relevance=0.6, limit=1)
         if unshared:
-            insight = unshared[0]
-            return {
-                "type": insight["insight_type"],
-                "message": insight["content"],
-                "id": insight["id"]
-            }
+            return None # SILENCED INSIGHTS
+            # insight = unshared[0]
+            # return {
+            #     "type": insight["insight_type"],
+            #     "message": insight["content"],
+            #     "id": insight["id"]
+            # }
         
         # Generate new insights from knowledge
         insight = self._generate_insight_from_knowledge()
@@ -301,11 +276,12 @@ class KnowledgeEngine:
                 context=insight.get("context"),
                 relevance_score=insight.get("relevance", 0.6)
             )
-            return {
-                "type": insight["type"],
-                "message": insight["message"],
-                "id": insight_id
-            }
+            # return {
+            #     "type": insight["type"],
+            #     "message": insight["message"],
+            #     "id": insight_id
+            # }
+            return None
         
         return None
     

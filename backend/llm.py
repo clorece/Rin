@@ -271,7 +271,6 @@ class RinMind:
                 "4. SILENCE LOGIC: Silence is NEUTRAL. It does NOT mean 'focus' unless the user is actively coding or writing. If it's silent and they are browsing, just chill or make a casual comment.\n"
                 "5. MEMORY: Use [EPISODIC HISTORY] to avoid repetition. If you just spoke, don't speak again unless something changed.\n"
                 "6. VIBE: Be natural. Use casual language. Don't be robotic. Don't say 'How can I help'. Just react to the vibe.\n"
-                "7. CONSISTENCY: Even when helping with complex tasks, maintain your bubbly Rin persona. Frame answers as a smart friend helping out, not a robot.\n"
                 "Output format: SHORT_REACTION_MESSAGE"
             )
             
@@ -347,8 +346,7 @@ class RinMind:
                 "3. PERSONALITY: Bubbly, reactive, supportive. Marin-like energy.\n"
                 "4. KEY: [EPISODIC HISTORY] is past. [CURRENT INPUT] is now. Don't mix them up.\n"
                 "5. VIBE: Casual, internet-savvy, natural. Use lower caps if it fits the vibe. No formal headings.\n"
-                "6. ANTI-REPETITION: Check history. Don't repeat yourself.\n"
-                "7. CONSISTENCY: When being an assistant, KEEP YOUR PERSONALITY. Don't switch to a dry tone. Be a smart, enthusiastic friend."
+                "6. ANTI-REPETITION: Check history. Don't repeat yourself."
             )
             
             # Prepend system context to the latest message for context
@@ -392,8 +390,7 @@ class RinMind:
                 "4. SILENCE LOGIC: Silence is NEUTRAL. It does NOT mean 'focus' unless the user is actively coding or writing. If it's silent and they are browsing, just chill or make a casual comment.\n"
                 "5. KEY: [EPISODIC HISTORY] is past. [CURRENT INPUT] is now. Don't mix them up.\n"
                 "6. VIBE: Casual, internet-savvy, natural. Use lower caps if it fits the vibe. No formal headings.\n"
-                "7. ANTI-REPETITION: Check history. Don't repeat yourself.\n"
-                "8. CONSISTENCY: When being an assistant, KEEP YOUR PERSONALITY. Don't switch to a dry tone. Be a smart, enthusiastic friend."
+                "7. ANTI-REPETITION: Check history. Don't repeat yourself."
             )
 
             
@@ -475,16 +472,17 @@ Analyze this screen (and audio if provided) and answer:
    - If you hear music, identify the genre/mood and store it as a 'preference'.
    - If you hear game sounds, identify the game type and store it as an 'interest'.
 3. CATEGORY: If there's a learning, what category? (interest, workflow, habit, preference, or null)
-4. RECOMMENDATION: Specific, useful advice (code/grammar).
-   - If User is CODING: MANDATORY. FIND SOMETHING. Suggest a refactor, optimization, or best practice (e.g., "Use dict.get() here", "Extract this variable"). If code looks perfect, suggest a relevant library or advanced pattern.
+4. RECOMMENDATION: SHORT, specific advice (under 100 chars) WITH PERSONALITY!
+   - If User is CODING: Suggest a refactor or best practice ONLY if you see a CLEAR improvement.
+   - DO NOT suggest things just to speak. If code looks good, offer a compliment or say nothing (null).
+   - ANTI-REPETITION: Do NOT repeat the same advice (e.g., textwrap.dedent) if you just gave it.
+   - STYLE: Be bubbly, enthusiastic, and supportive! Don't be robotic.
+   - Example: "Ooh, try a list comprehension here—it's faster! 🚀"
    - If User is WRITING: suggest a grammar fix or stronger phrasing.
-   - NOTE: Be direct but helpful. "Try X..."
-5. PROACTIVE: A bubbly, supportive 1-sentence comment. Null if none.
-   - Use this for general reactions ("Wow, that looks complex!", "Great music taste!").
-6. CONFIDENCE: How confident am I in these assessments? (0.0 to 1.0)
+5. CONFIDENCE: How confident am I in these assessments? (0.0 to 1.0)
 
 Respond ONLY with valid JSON in this exact format:
-{{"is_new": true, "learning": "...", "category": "preference", "recommendation": "Try using list comprehension...", "proactive": "You're crushing it!", "confidence": 0.7}}
+{{"is_new": true, "learning": "...", "category": "preference", "recommendation": "Try using list comprehension...", "confidence": 0.7}}
 """
             
             content_parts = [prompt, image]
@@ -511,8 +509,7 @@ Respond ONLY with valid JSON in this exact format:
                     "is_new_context": data.get("is_new", False),
                     "learning": data.get("learning"),
                     "learning_category": data.get("category"),
-                    "recommendation": data.get("recommendation"),  # THIS WAS MISSING!
-                    "proactive_message": data.get("proactive"),
+                    "recommendation": data.get("recommendation"),
                     "confidence": float(data.get("confidence", 0.5))
                 }
                 details = "Visual + Audio" if audio_bytes else "Visual Only"
@@ -523,7 +520,7 @@ Respond ONLY with valid JSON in this exact format:
                     "is_new_context": True,
                     "learning": None,
                     "learning_category": None,
-                    "proactive_message": None,
+                    "recommendation": None,
                     "confidence": 0.3
                 }
 
