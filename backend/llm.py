@@ -511,6 +511,7 @@ Respond ONLY with valid JSON in this exact format:
                     "is_new_context": data.get("is_new", False),
                     "learning": data.get("learning"),
                     "learning_category": data.get("category"),
+                    "recommendation": data.get("recommendation"),  # THIS WAS MISSING!
                     "proactive_message": data.get("proactive"),
                     "confidence": float(data.get("confidence", 0.5))
                 }

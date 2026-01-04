@@ -50,6 +50,7 @@ last_analyzed_image = None
 last_trigger_time = 0
 last_seen_image = None
 last_screen_change_time = 0
+last_recommendation_time = 0  # Cooldown for recommendations
 
 # -- Lifecycle Events --
 @app.on_event("startup")
@@ -280,13 +281,28 @@ async def process_observation(window_title, image_b64, trigger_type=None):
                     log_activity("LEARNING", f"({gemini_result.get('learning_category', 'general')}): {gemini_result.get('insight')}")
                 
                 # Handle Recommendations (High Priority - Bypass Staleness Check)
-                if gemini_result.get("recommendation"):
-                    reaction_queue.append({
-                        "type": "recommendation",
-                        "content": "💡", # Icon for frontend if it falls back
-                        "description": gemini_result["recommendation"]
-                    })
-                    log_activity("RECOMMENDATION", f"{gemini_result['recommendation']}")
+                # Add cooldown to prevent spam
+                import time as time_module
+                rec_content = gemini_result.get("recommendation")
+                
+                # Filter out literal "null" strings and apply 60s cooldown
+                if rec_content and rec_content.lower() != "null":
+                    global last_recommendation_time
+                    try:
+                        last_rec_time = last_recommendation_time
+                    except NameError:
+                        last_rec_time = 0
+                    
+                    if time_module.time() - last_rec_time > 60:  # 60 second cooldown
+                        last_recommendation_time = time_module.time()
+                        reaction_queue.append({
+                            "type": "recommendation",
+                            "content": "💡",
+                            "description": rec_content
+                        })
+                        log_activity("RECOMMENDATION", f"{rec_content}")
+                    else:
+                        log_activity("THROTTLED", f"Recommendation (Cooldown): {rec_content[:50]}...")
 
                 # Handle Proactive Comments (Low Priority - Check Staleness)
                 if gemini_result.get("proactive"):
