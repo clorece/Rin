@@ -58,12 +58,18 @@ async def startup_event():
     import os
     try:
         log_dir = os.path.join(os.path.dirname(__file__), "..", "logs")
+        # Force create/clear activity.log and write header
+        activity_log = os.path.join(log_dir, "activity.log")
+        with open(activity_log, "w", encoding="utf-8") as f:
+             f.write(f"[{datetime.datetime.now()}] [SYSTEM] Session Started\n")
+             
+        # Clear others if they exist
         for log_file in ["api_usage.log", "error.log"]:
             path = os.path.join(log_dir, log_file)
             if os.path.exists(path):
                 with open(path, "w") as f:
-                    f.write("") # Truncate
-        print("[Startup] Cleared api_usage.log and error.log")
+                    f.write("")
+        print("[Startup] Logs initialized.")
     except Exception as e:
         print(f"[Startup] Failed to clear logs: {e}")
 
@@ -87,6 +93,25 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "ok", "learning_active": activity_collector.is_running()}
+
+
+def log_activity(activity_type, content):
+    """
+    Logs unified activity to logs/activity.log.
+    """
+    import datetime
+    try:
+        log_dir = os.path.join(os.path.dirname(__file__), "..", "logs")
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+            
+        log_path = os.path.join(log_dir, "activity.log")
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"[{timestamp}] [{activity_type}] {content}\n")
+    except Exception as e:
+        print(f"Failed to log activity: {e}")
 
 
 def calculate_visual_difference(img_b64_1, img_b64_2):
@@ -255,6 +280,7 @@ async def process_observation(window_title, image_b64, trigger_type=None):
                         "content": "",
                         "description": gemini_result["proactive"]
                     })
+                    log_activity("INSIGHT", f"Proactive ({gemini_result.get('learning_category', 'general')}): {gemini_result['proactive']}")
             except Exception as e:
                 print(f"[Knowledge] Gemini learning failed: {e}")
         
@@ -267,8 +293,13 @@ async def process_observation(window_title, image_b64, trigger_type=None):
             "description": result['description']
         })
         
+        # Log Activity
+        log_activity("OBSERVATION", f"Window: {window_title} | App: {app_name}")
+        log_activity("REACTION", result['description'])
+        
     except Exception as e:
         print(f"Analysis failed: {e}")
+        log_activity("ERROR", f"Analysis failed: {e}")
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(msg: ChatMessage):
@@ -307,13 +338,17 @@ async def chat_endpoint(msg: ChatMessage):
             print(f"[Chat] Including {len(audio_bytes)} bytes of audio context")
     
     # Generate response (with optional audio context)
-    response_text = await mind.chat_response_async(formatted_history, msg.message, audio_bytes=audio_bytes)
+    reply_text = await mind.chat_response_async(formatted_history, msg.message, audio_bytes=audio_bytes)
     
     # Record model response (full text)
-    database.add_memory("chat", f"Rin: {response_text}")
+    database.add_memory("chat", f"Rin: {reply_text}")
     
-    # Split for display
-    chunks = split_into_chunks(response_text, limit=200)
+    # Log Chat
+    log_activity("CHAT", f"User: {msg.message}")
+    log_activity("CHAT", f"Rin: {reply_text}")
+
+    # Split for UI
+    chunks = split_into_chunks(reply_text, limit=200)
     
     # Queue extra chunks
     if len(chunks) > 1:

@@ -160,6 +160,16 @@ class KnowledgeEngine:
             
             result["proactive"] = proactive_msg
             print(f"[Knowledge] Gemini proactive: {proactive_msg}")
+            
+            # Log Activity (Import here to avoid circular dependency if possible, or assume main has set it up)
+            # Since log_activity is in main, we can't easily import it without circular imports.
+            # Instead, we will rely on main.py to log the insight when it receives the return value.
+            # main.py line 253 already handles logging for Gemini proactive insights!
+            # So we only need to log 'Learnings' here if we want them, but main.py doesn't see those directly.
+            
+            # Actually, main.py logs the PROACTIVE insight.
+            # We should strictly log the LEARNING insight here if we want it recorded.
+            pass
         
         return result
     
