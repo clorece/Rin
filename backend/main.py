@@ -503,6 +503,17 @@ async def trigger_manual_insight(insight: ManualInsight):
     )
     return {"status": "created", "id": insight_id}
 
+@app.post("/knowledge/test/recommendation")
+def trigger_test_recommendation():
+    """Manually queue a test recommendation to verify UI."""
+    reaction_queue.append({
+        "type": "recommendation",
+        "content": "💡",
+        "description": "Test Recommendation: Try using a list comprehension here for better performance!"
+    })
+    log_activity("DEBUG", "Manually triggered test recommendation.")
+    return {"status": "queued"}
+
 @app.post("/knowledge/insight/{insight_id}/feedback")
 def submit_insight_feedback(insight_id: int, feedback: str = "acknowledged"):
     """Submit feedback on an insight."""

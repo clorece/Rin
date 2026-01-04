@@ -475,10 +475,10 @@ Analyze this screen (and audio if provided) and answer:
    - If you hear music, identify the genre/mood and store it as a 'preference'.
    - If you hear game sounds, identify the game type and store it as an 'interest'.
 3. CATEGORY: If there's a learning, what category? (interest, workflow, habit, preference, or null)
-4. RECOMMENDATION: Specific, useful advice (code/grammar). Try to find one!
-   - If User is CODING: ACTIVELY LOOK for a specific refactor, cleaner syntax, or optimization (e.g., "Use list comprehension", "Add type hint").
+4. RECOMMENDATION: Specific, useful advice (code/grammar).
+   - If User is CODING: MANDATORY. FIND SOMETHING. Suggest a refactor, optimization, or best practice (e.g., "Use dict.get() here", "Extract this variable"). If code looks perfect, suggest a relevant library or advanced pattern.
    - If User is WRITING: suggest a grammar fix or stronger phrasing.
-   - NOTE: Keep it OPTIONAL and POLITE. "Maybe try..."
+   - NOTE: Be direct but helpful. "Try X..."
 5. PROACTIVE: A bubbly, supportive 1-sentence comment. Null if none.
    - Use this for general reactions ("Wow, that looks complex!", "Great music taste!").
 6. CONFIDENCE: How confident am I in these assessments? (0.0 to 1.0)
