@@ -53,6 +53,20 @@ last_screen_change_time = 0
 @app.on_event("startup")
 async def startup_event():
     """Start background services on app startup."""
+    
+    # Clear logs on startup to keep them fresh per session
+    import os
+    try:
+        log_dir = os.path.join(os.path.dirname(__file__), "..", "logs")
+        for log_file in ["api_usage.log", "error.log"]:
+            path = os.path.join(log_dir, log_file)
+            if os.path.exists(path):
+                with open(path, "w") as f:
+                    f.write("") # Truncate
+        print("[Startup] Cleared api_usage.log and error.log")
+    except Exception as e:
+        print(f"[Startup] Failed to clear logs: {e}")
+
     print("[Startup] Starting activity collector...")
     activity_collector.start()
     print("[Startup] Starting ears (audio capture)...")

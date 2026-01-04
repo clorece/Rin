@@ -161,6 +161,11 @@ class Ears:
         # Concatenate
         full_data = np.concatenate(chunks, axis=0)
         
+        # Check volume threshold (simple RMS)
+        rms = np.sqrt(np.mean(full_data**2))
+        if rms < 0.001:  # Silence threshold
+            return None
+        
         # Convert to int16 PCM for WAV
         pcm_data = (full_data * 32767).astype(np.int16)
         
