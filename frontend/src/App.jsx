@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { checkHealth, captureScreen, getUpdates, getProactiveInsight, acknowledgeInsight } from './services/api';
+import { checkHealth, captureScreen, getUpdates, getProactiveInsight, acknowledgeInsight, getThinkingStatus } from './services/api';
 import ChatInterface from './components/ChatInterface';
 import NotificationCenter from './components/NotificationCenter';
 import rinPfp from './assets/rin-pfp.jpg';
@@ -16,6 +16,7 @@ function App() {
     const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(false);
     const [isListening, setIsListening] = useState(true); // Audio listening state
     const [externalChatMessage, setExternalChatMessage] = useState(null);
+    const [thinkingState, setThinkingState] = useState('active'); // Thinking system state
 
     // Notification History
     const [notifications, setNotifications] = useState([]);
@@ -51,6 +52,19 @@ function App() {
 
         // Poll every 5 seconds
         const interval = setInterval(connect, 5000);
+        return () => clearInterval(interval);
+    }, []);
+
+    // Thinking Status Polling
+    useEffect(() => {
+        const pollThinking = async () => {
+            try {
+                const status = await getThinkingStatus();
+                setThinkingState(status.state || 'active');
+            } catch (e) { }
+        };
+        pollThinking();
+        const interval = setInterval(pollThinking, 5000);
         return () => clearInterval(interval);
     }, []);
 
@@ -225,19 +239,57 @@ function App() {
                 zIndex: 50, // Ensure header is above chat
                 WebkitAppRegion: 'drag' // Allow dragging from header area
             }}>
-                {/* Profile Picture */}
-                <img
-                    src={rinPfp}
-                    alt="Rin"
-                    style={{
-                        width: '80px',
-                        height: '80px',
+                {/* Profile Picture with Thinking Indicator */}
+                <div style={{ position: 'relative' }}>
+                    <img
+                        src={rinPfp}
+                        alt="Rin"
+                        style={{
+                            width: '80px',
+                            height: '80px',
+                            borderRadius: '50%',
+                            objectFit: 'cover',
+                            border: `3px solid ${thinkingState === 'deep' ? '#60a5fa' :
+                                    thinkingState === 'thinking' ? '#fbbf24' :
+                                        thinkingState === 'resting' ? 'rgba(255,255,255,0.3)' :
+                                            '#4ade80'
+                                }`,
+                            boxShadow: `0 0 ${thinkingState === 'deep' ? '15px' : '12px'} ${thinkingState === 'deep' ? 'rgba(96, 165, 250, 0.5)' :
+                                    thinkingState === 'thinking' ? 'rgba(251, 191, 36, 0.4)' :
+                                        thinkingState === 'resting' ? 'rgba(255,255,255,0.1)' :
+                                            'rgba(74, 222, 128, 0.3)'
+                                }`,
+                            transition: 'all 0.5s ease'
+                        }}
+                    />
+                    {/* Thinking state tooltip */}
+                    <div style={{
+                        position: 'absolute',
+                        bottom: '-4px',
+                        right: '-4px',
+                        width: '20px',
+                        height: '20px',
                         borderRadius: '50%',
-                        objectFit: 'cover',
-                        border: '2px solid rgba(255,255,255,0.1)',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
-                    }}
-                />
+                        background: 'rgba(0,0,0,0.7)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '10px',
+                        border: '1px solid rgba(255,255,255,0.2)'
+                    }} title={{
+                        'active': 'Active - Watching',
+                        'thinking': 'Thinking - Processing observations',
+                        'deep': 'Deep Reflection - Organizing knowledge',
+                        'resting': 'Resting - Waiting for activity'
+                    }[thinkingState] || 'Unknown'}>
+                        {{
+                            'active': '🟢',
+                            'thinking': '🟡',
+                            'deep': '🔵',
+                            'resting': '⚪'
+                        }[thinkingState] || '❓'}
+                    </div>
+                </div>
 
                 {/* Title */}
                 <h1 style={{

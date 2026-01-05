@@ -521,6 +521,7 @@ Analyze this screen (and audio if provided) and answer:
    - STYLE: Be bubbly, enthusiastic, and supportive! Don't be robotic.
    - Example: "Ooh, try a list comprehension here—it's faster! 🚀"
    - If User is WRITING: suggest a grammar fix or stronger phrasing.
+   - If you have NOTHING useful to say, set recommendation to "STAY_QUIET" - this is better than noise!
 5. CONFIDENCE: How confident am I in these assessments? (0.0 to 1.0)
 
 Respond ONLY with valid JSON in this exact format:

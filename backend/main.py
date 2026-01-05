@@ -149,9 +149,9 @@ async def process_significant_observation(obs):
             audio_bytes=obs.audio_bytes
         )
         
-        # Handle recommendations
+        # Handle recommendations (filter out null and STAY_QUIET)
         rec_content = gemini_result.get("recommendation")
-        if rec_content and rec_content.lower() != "null" and thinking_engine.can_notify():
+        if rec_content and rec_content.lower() not in ["null", "stay_quiet"] and thinking_engine.can_notify():
             thinking_engine.mark_notification_sent()
             
             reaction_queue.append({
@@ -439,6 +439,37 @@ async def process_observation(window_title, image_b64, trigger_type=None):
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(msg: ChatMessage):
+    # Handle special commands
+    msg_lower = msg.message.lower().strip()
+    if any(phrase in msg_lower for phrase in ["what are you thinking", "what's on your mind", "thinking about"]):
+        # Return thinking system status without calling Gemini
+        status = thinking_engine.get_status()
+        thoughts = thinking_engine.get_pending_thoughts()
+        
+        state_descriptions = {
+            "active": "I'm actively watching and learning!",
+            "thinking": "I'm processing what I've observed...",
+            "deep": "I'm in deep reflection, organizing what I've learned.",
+            "resting": "I'm resting, waiting for activity."
+        }
+        
+        state_msg = state_descriptions.get(status.get("state", "active"), "I'm here!")
+        
+        if thoughts:
+            thought_text = thoughts[0] if isinstance(thoughts[0], str) else str(thoughts[0])
+            response = f"{state_msg} 💭 {thought_text}"
+        else:
+            stats = status.get("stats", {})
+            obs_count = stats.get("observations_total", 0)
+            if obs_count > 0:
+                response = f"{state_msg} I've processed {obs_count} observations this session."
+            else:
+                response = f"{state_msg} Nothing specific on my mind right now~"
+        
+        database.add_memory("chat", f"User: {msg.message}")
+        database.add_memory("chat", f"Rin: {response}")
+        return {"response": [response]}
+    
     # Retrieve recent history
     memories = database.get_recent_memories(limit=10)
     

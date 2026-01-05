@@ -90,3 +90,12 @@ export const toggleEars = async (enable) => {
         return { listening: false };
     }
 };
+
+export const getThinkingStatus = async () => {
+    try {
+        const response = await fetch(`${API_URL}/thinking/status`);
+        return await response.json();
+    } catch (error) {
+        return { state: 'unknown', idle_seconds: 0 };
+    }
+};
