@@ -120,11 +120,21 @@ async def thinking_cycle_loop():
             if thinking_engine.should_run_thinking_cycle():
                 result = await thinking_engine.run_thinking_cycle()
                 
-                # Process significant observations through Gemini
+                # Two-tier decision: process observations based on significance
                 for obs in result.significant_observations:
                     if obs.image_bytes:
-                        thinking_engine.increment_gemini_calls()
-                        await process_significant_observation(obs)
+                        # Tier 1: Edge decision - should we even ask Gemini?
+                        if thinking_engine.should_consult_gemini(obs):
+                            thinking_engine.increment_gemini_calls()
+                            await process_significant_observation(obs)
+                        else:
+                            # Below Gemini threshold - save for later if there's a description
+                            if obs.description:
+                                thinking_engine.save_thought_for_later(
+                                    content=obs.description,
+                                    reason="Below Gemini threshold",
+                                    context=obs.window_title
+                                )
             
             # Deep thinking during idle
             if state == ThinkingState.DEEP_REFLECTION:
@@ -138,9 +148,13 @@ async def thinking_cycle_loop():
 
 
 async def process_significant_observation(obs):
-    """Process a significant observation through Gemini."""
+    """
+    Process a significant observation through Gemini.
+    Rin decides when to speak based on her state and context.
+    Gemini only provides the recommendation content.
+    """
     try:
-        # This is where Gemini gets called for truly significant observations
+        # Ask Gemini for recommendation content
         gemini_result = await knowledge_engine.process_observation_with_gemini(
             image_bytes=obs.image_bytes,
             window_title=obs.window_title,
@@ -149,9 +163,49 @@ async def process_significant_observation(obs):
             audio_bytes=obs.audio_bytes
         )
         
-        # Handle recommendations (filter out null and STAY_QUIET)
+        # Get Gemini's recommendation (content only)
         rec_content = gemini_result.get("recommendation")
-        if rec_content and rec_content.lower() not in ["null", "stay_quiet"] and thinking_engine.can_notify():
+        
+        # Skip if no actual content
+        if not rec_content or rec_content.lower() in ["null", "none", ""]:
+            return
+        
+        # === RIN'S DECISION LOGIC ===
+        # Rin decides whether to speak based on her intelligence:
+        
+        # 1. Check cooldown - respect notification timing
+        can_speak = thinking_engine.can_notify()
+        
+        # 2. Check Rin's current state - her "mood" affects behavior
+        current_state = thinking_engine.state
+        
+        # 3. Check user activity - don't interrupt flow
+        activity_intensity = thinking_engine.idle_detector.get_activity_intensity()
+        user_is_focused = activity_intensity < 0.3  # Low switching = focused
+        
+        # Rin's decision matrix:
+        # - ACTIVE state + cooldown passed → Speak (user is engaged)
+        # - THINKING state + cooldown passed → Speak (Rin has processed and decided)
+        # - DEEP state → Save for later (user is idle, don't disturb)
+        # - RESTING state → Save for later (minimal interaction mode)
+        # - User highly focused → Be more selective (higher bar to interrupt)
+        
+        should_speak = False
+        reason = ""
+        
+        if current_state == ThinkingState.RESTING:
+            reason = "Rin is resting"
+        elif current_state == ThinkingState.DEEP_REFLECTION:
+            reason = "User is idle, saving for later"
+        elif not can_speak:
+            reason = "Cooldown active"
+        elif user_is_focused and obs.significance_score < 0.6:
+            reason = f"User focused, score {obs.significance_score:.2f} too low"
+        else:
+            # Rin decides to speak!
+            should_speak = True
+        
+        if should_speak:
             thinking_engine.mark_notification_sent()
             
             reaction_queue.append({
@@ -166,8 +220,16 @@ async def process_significant_observation(obs):
                 meta={"role": "model", "is_recommendation": True}
             )
             
-            log_activity("RECOMMENDATION", f"{rec_content}")
-            print(f"[Thinking] Significant recommendation: {rec_content}")
+            log_activity("RECOMMENDATION", f"[RIN SPEAKS] {rec_content}")
+            print(f"[Thinking] Rin decides to speak: {rec_content}")
+        else:
+            # Save for "what are you thinking?"
+            thinking_engine.save_thought_for_later(
+                content=rec_content,
+                reason=reason,
+                context=obs.window_title
+            )
+            log_activity("THINKING", f"[SAVED] ({reason}) {rec_content[:50]}...")
             
     except Exception as e:
         print(f"[Thinking] Gemini processing failed: {e}")
@@ -442,9 +504,10 @@ async def chat_endpoint(msg: ChatMessage):
     # Handle special commands
     msg_lower = msg.message.lower().strip()
     if any(phrase in msg_lower for phrase in ["what are you thinking", "what's on your mind", "thinking about"]):
-        # Return thinking system status without calling Gemini
+        # Return thinking system status and saved thoughts without calling Gemini
         status = thinking_engine.get_status()
-        thoughts = thinking_engine.get_pending_thoughts()
+        pending_thoughts = thinking_engine.get_pending_thoughts()
+        saved_thoughts = thinking_engine.get_saved_thoughts()
         
         state_descriptions = {
             "active": "I'm actively watching and learning!",
@@ -455,14 +518,21 @@ async def chat_endpoint(msg: ChatMessage):
         
         state_msg = state_descriptions.get(status.get("state", "active"), "I'm here!")
         
-        if thoughts:
-            thought_text = thoughts[0] if isinstance(thoughts[0], str) else str(thoughts[0])
+        # Prioritize saved thoughts (from two-tier decision)
+        if saved_thoughts:
+            # Get the most recent saved thought
+            latest = saved_thoughts[-1]
+            thinking_engine.clear_saved_thoughts()
+            response = f"{state_msg} 💭 {latest.content}"
+        elif pending_thoughts:
+            thought_text = pending_thoughts[0] if isinstance(pending_thoughts[0], str) else str(pending_thoughts[0])
             response = f"{state_msg} 💭 {thought_text}"
         else:
             stats = status.get("stats", {})
             obs_count = stats.get("observations_total", 0)
+            edge_filtered = stats.get("edge_filtered", 0)
             if obs_count > 0:
-                response = f"{state_msg} I've processed {obs_count} observations this session."
+                response = f"{state_msg} I've processed {obs_count} observations this session ({edge_filtered} filtered locally)."
             else:
                 response = f"{state_msg} Nothing specific on my mind right now~"
         

@@ -54,6 +54,15 @@ class ThinkingCycleResult:
     notification_content: Optional[str] = None
 
 
+@dataclass
+class SavedThought:
+    """A thought saved for later (when user asks 'what are you thinking?')."""
+    content: str
+    reason: str  # Why it was saved (e.g., "User in flow", "Not urgent")
+    timestamp: float = field(default_factory=time.time)
+    context: Optional[str] = None  # Window title when thought occurred
+
+
 class ObservationBuffer:
     """
     Ring buffer for accumulating observations before processing.
@@ -235,12 +244,16 @@ class ThinkingEngine:
         # Timing configuration
         self.thinking_cycle_interval = 45  # seconds
         self.notification_cooldown = 30    # seconds
-        self.significance_threshold = 0.5  # Minimum score for Gemini
+        
+        # Two-tier decision thresholds
+        self.significance_threshold = 0.4  # Minimum for any processing
+        self.gemini_threshold = 0.45       # Slightly above significance - let Gemini decide more
         
         # State tracking
         self._last_thinking_cycle = 0
         self._last_notification_time = 0
         self._pending_thoughts: List[str] = []
+        self._saved_thoughts: List[SavedThought] = []  # Deferred notifications
         self._cycle_count = 0
         self._gemini_call_count = 0
         
@@ -250,7 +263,9 @@ class ThinkingEngine:
             "observations_buffered": 0,
             "observations_deduplicated": 0,
             "significant_count": 0,
-            "gemini_calls": 0,
+            "gemini_consulted": 0,
+            "edge_filtered": 0,
+            "thoughts_saved": 0,
             "notifications_sent": 0
         }
     
@@ -391,7 +406,47 @@ class ThinkingEngine:
     def increment_gemini_calls(self):
         """Track Gemini API usage."""
         self._gemini_call_count += 1
-        self._stats["gemini_calls"] += 1
+        self._stats["gemini_consulted"] += 1
+    
+    def should_consult_gemini(self, obs: Observation) -> bool:
+        """
+        Two-tier decision: Should we consult Gemini about this observation?
+        Returns True only if significance score meets Gemini threshold.
+        """
+        if obs.significance_score >= self.gemini_threshold:
+            return True
+        
+        # Below Gemini threshold - edge-filtered
+        self._stats["edge_filtered"] += 1
+        return False
+    
+    def save_thought_for_later(self, content: str, reason: str, context: str = None):
+        """
+        Save a thought for when user asks 'what are you thinking?'
+        Used when edge logic decides not to notify immediately.
+        """
+        thought = SavedThought(
+            content=content,
+            reason=reason,
+            timestamp=time.time(),
+            context=context
+        )
+        self._saved_thoughts.append(thought)
+        self._stats["thoughts_saved"] += 1
+        
+        # Keep only last 10 thoughts
+        if len(self._saved_thoughts) > 10:
+            self._saved_thoughts = self._saved_thoughts[-10:]
+        
+        print(f"[Thinking] Saved thought for later: {content[:50]}...")
+    
+    def get_saved_thoughts(self) -> List[SavedThought]:
+        """Get saved thoughts (deferred notifications)."""
+        return self._saved_thoughts.copy()
+    
+    def clear_saved_thoughts(self):
+        """Clear saved thoughts after sharing."""
+        self._saved_thoughts.clear()
     
     def _hash_context(self, window_title: str, app_name: str) -> str:
         """Generate a hash for context deduplication."""

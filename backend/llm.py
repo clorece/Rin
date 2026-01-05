@@ -521,11 +521,11 @@ Analyze this screen (and audio if provided) and answer:
    - STYLE: Be bubbly, enthusiastic, and supportive! Don't be robotic.
    - Example: "Ooh, try a list comprehension here—it's faster! 🚀"
    - If User is WRITING: suggest a grammar fix or stronger phrasing.
-   - If you have NOTHING useful to say, set recommendation to "STAY_QUIET" - this is better than noise!
+   - Compliments and encouragement ARE valid recommendations!
 5. CONFIDENCE: How confident am I in these assessments? (0.0 to 1.0)
 
 Respond ONLY with valid JSON in this exact format:
-{{"is_new": true, "learning": "...", "category": "preference", "recommendation": "Try using list comprehension...", "confidence": 0.7}}
+{{"is_new": true, "learning": "...", "category": "preference", "recommendation": "...", "confidence": 0.7}}
 """
             
             content_parts = [prompt, image]
@@ -555,6 +555,7 @@ Respond ONLY with valid JSON in this exact format:
                     "learning": data.get("learning"),
                     "learning_category": data.get("category"),
                     "recommendation": data.get("recommendation"),
+                    "should_speak": data.get("should_speak", "QUIET"),  # SPEAK, LATER, or QUIET
                     "confidence": float(data.get("confidence", 0.5))
                 }
             except json.JSONDecodeError:
