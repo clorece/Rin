@@ -37,16 +37,20 @@ class Ears:
         """Initialize the loopback audio device using soundcard with numpy fix."""
         try:
             # Apply numpy compatibility fix BEFORE importing soundcard
-            if not hasattr(np, 'fromstring'):
-                # Create a wrapper that handles the binary mode case
-                def fromstring_compat(string, dtype=float, count=-1, sep=''):
-                    if sep == '':
-                        # Binary mode - use frombuffer
-                        return np.frombuffer(string, dtype=dtype, count=count)
-                    else:
-                        # Text mode - not supported in numpy 2.0, raise clear error
-                        raise ValueError("Text mode fromstring not supported")
-                np.fromstring = fromstring_compat
+            # Force patch because newer numpy has fromstring but it fails on binary
+            def fromstring_compat(string, dtype=float, count=-1, sep=''):
+                if sep == '':
+                    # Binary mode - use frombuffer
+                    return np.frombuffer(string, dtype=dtype, count=count)
+                # Text mode - try original or fail
+                try:
+                    return np.original_fromstring(string, dtype=dtype, count=count, sep=sep)
+                except AttributeError:
+                    raise ValueError("Text mode fromstring not supported")
+            
+            if hasattr(np, 'fromstring'):
+                np.original_fromstring = np.fromstring
+            np.fromstring = fromstring_compat
             
             import soundcard as sc
             
