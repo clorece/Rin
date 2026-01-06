@@ -7,7 +7,7 @@ import hashlib
 import database
 from typing import Optional
 from datetime import datetime
-from logger import log_activity
+from logger import log_activity, log_system_change
 
 
 class KnowledgeEngine:
@@ -137,6 +137,14 @@ class KnowledgeEngine:
             elif category == "preference":
                 database.learn_about_user(
                     category="preference",
+                    key=learning[:30],
+                    value=learning,
+                    confidence=confidence
+                )
+            elif category == "general_knowledge":
+                # Store general world knowledge
+                database.learn_about_user(
+                    category="general_knowledge",
                     key=learning[:30],
                     value=learning,
                     confidence=confidence
@@ -413,6 +421,7 @@ class KnowledgeEngine:
             
             if to_delete or archived > 0:
                 print(f"[Knowledge] Organized: merged {len(to_delete)} duplicates, archived {archived} old entries")
+                log_system_change("KNOWLEDGE_MAINTENANCE", "cleanup", f"Merged {len(to_delete)} duplicates, archived {archived} entries")
                 
         except Exception as e:
             print(f"[Knowledge] Organization error: {e}")
@@ -442,6 +451,7 @@ class KnowledgeEngine:
             
             if decayed > 0:
                 print(f"[Knowledge] Applied decay to {decayed} knowledge entries")
+                log_system_change("KNOWLEDGE_MAINTENANCE", "decay", f"Applied confidence decay to {decayed} entries")
                 
         except Exception as e:
             print(f"[Knowledge] Decay error: {e}")

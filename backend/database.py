@@ -2,6 +2,7 @@ import sqlite3
 import json
 from datetime import datetime, timedelta
 import os
+from logger import log_system_change
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "thea.db")
 
@@ -185,6 +186,10 @@ def add_memory(mem_type, content, meta=None):
     )
     conn.commit()
     conn.close()
+    
+    # Log system change for significant memories
+    if mem_type != "observation":  # Observations are too noisy, log chat/thoughts
+        log_system_change("MEMORY", "added", f"[{mem_type}] {content[:50]}...")
 
 def get_recent_memories(limit=10):
     conn = get_db_connection()
@@ -339,6 +344,9 @@ def save_pattern(pattern_type: str, pattern_key: str, pattern_data: dict,
     
     conn.commit()
     conn.close()
+    
+    action = "updated" if existing else "created"
+    log_system_change("LEARNING", f"pattern_{action}", f"[{pattern_type}] {pattern_key} (conf: {confidence:.2f})")
 
 def get_patterns(pattern_type: str = None, min_confidence: float = 0.0) -> list:
     """Get learned patterns, optionally filtered by type and confidence."""
@@ -453,6 +461,13 @@ def learn_about_user(category: str, key: str, value: str, confidence: float = 0.
             """, (category, key, value, confidence, source))
         
         conn.commit()
+        
+        action = "updated" if c.rowcount > 0 else "created" 
+        # Note: rowcount logic in sqlite with UPSERT style update might vary, 
+        # but here we separate Update vs Insert.
+        # Actually logic above does Update then Insert.
+        
+        log_system_change("KNOWLEDGE", f"user_fact_learned", f"[{category}] {key}: {value} (conf: {confidence:.2f})")
         return True
     except Exception as e:
         print(f"[Knowledge] Error learning about user: {e}")
@@ -498,6 +513,9 @@ def add_rin_insight(insight_type: str, content: str, context: dict = None,
     insight_id = c.lastrowid
     conn.commit()
     conn.close()
+    
+    log_system_change("INSIGHT", "generated", f"[{insight_type}] {content[:50]}... (score: {relevance_score:.2f})")
+    
     return insight_id
 
 
@@ -722,7 +740,10 @@ def add_to_core_kb(section: str, key: str, data: dict) -> bool:
     kb[section][key] = data
     kb["metadata"]["last_updated"] = datetime.now().strftime("%Y-%m-%d")
     
-    return save_core_kb(kb)
+    success = save_core_kb(kb)
+    if success:
+        log_system_change("CORE_KB", "updated", f"Added/Updated [{section}] {key}")
+    return success
 
 
 def add_to_gemini_kb(section: str, key: str, data: dict) -> bool:
@@ -749,7 +770,11 @@ def add_to_gemini_kb(section: str, key: str, data: dict) -> bool:
         if isinstance(v, dict) and k not in ["version", "metadata"]
     )
     
-    return save_gemini_kb(kb)
+    
+    success = save_gemini_kb(kb)
+    if success:
+        log_system_change("GEMINI_KB", "updated", f"Added/Updated [{section}] {key}")
+    return success
 
 
 def promote_staging_to_gemini_kb(entry_id: int) -> bool:
@@ -793,7 +818,8 @@ def promote_staging_to_gemini_kb(entry_id: int) -> bool:
     
     if success:
         mark_staging_promoted(entry_id)
-        print(f"[KB] Promoted staging entry {entry_id} to Gemini KB")
+        # print(f"[KB] Promoted staging entry {entry_id} to Gemini KB") # Handled by logger now
+        log_system_change("KNOWLEDGE_BASE", "promoted_staging", f"Entry {entry_id} promoted to {section}.{key}")
     
     return success
 

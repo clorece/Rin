@@ -26,24 +26,6 @@ export default function NotificationCenter({ notifications = [] }) {
                 paddingBottom: '20px',
                 paddingRight: '6px', // Space for content vs scrollbar
                 pointerEvents: 'auto',
-
-                // Smart Mask: Fade content (left), Keep scrollbar visible (right)
-                maskImage: `
-                    linear-gradient(to bottom, black 85%, transparent 100%),
-                    linear-gradient(to bottom, black, black)
-                `,
-                maskSize: 'calc(100% - 10px) 100%, 10px 100%',
-                maskPosition: '0 0, 100% 0',
-                maskRepeat: 'no-repeat',
-
-                // Webkit Prefix for compatibility
-                WebkitMaskImage: `
-                    linear-gradient(to bottom, black 85%, transparent 100%),
-                    linear-gradient(to bottom, black, black)
-                `,
-                WebkitMaskSize: 'calc(100% - 10px) 100%, 10px 100%',
-                WebkitMaskPosition: '0 0, 100% 0',
-                WebkitMaskRepeat: 'no-repeat'
             }}>
                 <AnimatePresence initial={false} mode='popLayout'>
                     {notifications.map((notif) => (

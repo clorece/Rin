@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 from collections import deque
 from typing import Optional, Dict, List, Any
 from dataclasses import dataclass, field
-from logger import log_activity
+from logger import log_activity, log_system_change
 
 
 class ThinkingState(Enum):
@@ -242,12 +242,12 @@ class ThinkingEngine:
         self.significance_scorer = SignificanceScorer()
         
         # Timing configuration
-        self.thinking_cycle_interval = 45  # seconds
-        self.notification_cooldown = 30    # seconds
+        self.thinking_cycle_interval = 10  # seconds (was 45) - faster reactions
+        self.notification_cooldown = 15    # seconds (was 30) - more bubbly
         
         # Two-tier decision thresholds
         self.significance_threshold = 0.4  # Minimum for any processing
-        self.gemini_threshold = 0.45       # Slightly above significance - let Gemini decide more
+        self.gemini_threshold = 0.4        # Same as significance - let Gemini decide more
         
         # State tracking
         self._last_thinking_cycle = 0
@@ -331,6 +331,7 @@ class ThinkingEngine:
         if self.state != previous_state:
             print(f"[Thinking] State: {previous_state.value} → {self.state.value}")
             log_activity("THINKING", f"State: {previous_state.value} → {self.state.value}")
+            log_system_change("THINKING_STATE", "changed", f"{previous_state.value} -> {self.state.value}")
         
         return self.state
     
@@ -437,6 +438,8 @@ class ThinkingEngine:
         # Keep only last 10 thoughts
         if len(self._saved_thoughts) > 10:
             self._saved_thoughts = self._saved_thoughts[-10:]
+            
+        log_system_change("THINKING_MEMORY", "thought_saved", f"[{reason}] {content[:50]}...")
         
         print(f"[Thinking] Saved thought for later: {content[:50]}...")
     

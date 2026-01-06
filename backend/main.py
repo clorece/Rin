@@ -69,12 +69,16 @@ async def startup_event():
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
 
-        # Clear all logs on startup for a fresh session
-        for log_file in ["api_usage.log", "error.log", "backend.log", "activity.log"]:
-            path = os.path.join(log_dir, log_file)
-            if os.path.exists(path):
-                with open(path, "w") as f:
-                    f.write("") # Truncate
+        # Clear all logs on startup for a fresh session (resilient to individual failures)
+        for log_file in ["api_usage.log", "error.log", "backend.log", "activity.log", "system_changes.log"]:
+            try:
+                path = os.path.join(log_dir, log_file)
+                if os.path.exists(path):
+                    with open(path, "w") as f:
+                        f.write("") # Truncate
+                    print(f"[Startup] Cleared {log_file}")
+            except Exception as e:
+                print(f"[Startup] Failed to clear {log_file}: {e}")
         
         # Mark new session in activity log
         log_activity("SYSTEM", "=== Rin Backend Started (Session Return) ===")
@@ -212,8 +216,8 @@ async def process_significant_observation(obs):
             thinking_engine.mark_notification_sent()
             
             reaction_queue.append({
-                "type": "recommendation",
-                "content": "💡",
+                "type": "reaction",
+                "content": "✨",
                 "description": rec_content
             })
             
@@ -663,8 +667,8 @@ async def process_observation(window_title, image_b64, trigger_type=None):
                         if time_module.time() - last_recommendation_time > 30:
                             last_recommendation_time = time_module.time()
                             reaction_queue.append({
-                                "type": "recommendation",
-                                "content": "💡",
+                                "type": "reaction",
+                                "content": "✨",
                                 "description": rec_content
                             })
                             log_activity("RECOMMENDATION", f"{rec_content}")
@@ -777,6 +781,38 @@ async def chat_endpoint(msg: ChatMessage):
     
     # Generate response (with visual and audio context)
     response_text = await mind.chat_response_async(formatted_history, msg.message, audio_bytes=audio_bytes, image_bytes=image_bytes)
+    
+    # Check for Teacher Protocol instructions (Hidden Core Updates)
+    import re
+    import json
+    
+    # Regex to find <CORE_UPDATE section="..." key="...">CONTENT</CORE_UPDATE>
+    # Using dotall to match newlines in content
+    pattern = r'<CORE_UPDATE section=["\'](.*?)["\'] key=["\'](.*?)["\']>(.*?)</CORE_UPDATE>'
+    matches = re.findall(pattern, response_text, re.DOTALL)
+    
+    for section, key, content_str in matches:
+        try:
+            # Parse the JSON content
+            # Replace single quotes with double quotes if needed (LLM quirk handling)
+            if content_str.strip().startswith("{") and "'" in content_str:
+                 # Very naive fix, but usually LLM returns valid JSON if prompted correctly
+                 pass
+                 
+            data = json.loads(content_str)
+            print(f"[Teaching] Rin is learning core concept: {section}.{key}")
+            
+            # Update the Core DB
+            success = database.add_to_core_kb(section, key, data)
+            
+            if success:
+                log_activity("LEARNING", f"Evaluated core concept: {key}")
+                
+        except Exception as e:
+            print(f"[Teaching] Failed to parse CORE_UPDATE: {e}")
+            
+    # Clean the response for the user (remove the tags)
+    response_text = re.sub(pattern, "", response_text, flags=re.DOTALL).strip()
     
     # Record model response (full text)
     database.add_memory("chat", f"Rin: {response_text}")

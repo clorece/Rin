@@ -441,7 +441,11 @@ class RinMind:
                 "5. KEY: [EPISODIC HISTORY] is past. [CURRENT INPUT] is now. Don't mix them up.\n"
                 "6. VIBE: Casual, internet-savvy, natural. Use lower caps if it fits the vibe. No formal headings.\n"
                 "7. ANTI-REPETITION: Check history. Don't repeat yourself.\n"
-                "8. SCREEN READING: If you have a screenshot attached, you can READ text on the screen including video titles, code, chat messages, etc."
+                "8. SCREEN READING: If you have a screenshot attached, you can READ text on the screen including video titles, code, chat messages, etc.\n"
+                "9. TEACHER PROTOCOL: If the user explicitly 'TEACHES' you a new Core Capability, Behavior, or App Definition, you MUST update your internal database.\n"
+                "   - Output a hidden tag: <CORE_UPDATE section=\"LAYER\" key=\"KEY\">JSON_DATA</CORE_UPDATE>\n"
+                "   - Sections: 'capabilities', 'behaviors', 'apps', 'contexts'.\n"
+                "   - Example: User says 'Rin, learn that you can fly.' -> You output: \"I can fly?! Awesome! <CORE_UPDATE section='capabilities' key='flight'>{'name': 'Flight', 'description': 'Rin can fly.'}</CORE_UPDATE>\""
             )
 
             
@@ -531,7 +535,9 @@ Analyze this screen (and audio if provided) and answer:
    - IMPORTANT: Audio is NOT temporary. It reveals PERMANENT facts about user taste (e.g., "User loves synthwave music", "User plays FPS games").
    - If you hear music, identify the genre/mood and store it as a 'preference'.
    - If you hear game sounds, identify the game type and store it as an 'interest'.
-3. CATEGORY: If there's a learning, what category? (interest, workflow, habit, preference, or null)
+3. CATEGORY: If there's a learning, what category? (interest, workflow, habit, preference, general_knowledge, or null)
+   - 'general_knowledge': meaningful concepts from the WORLD (e.g., "The game 'Elden Ring' is an open-world RPG", "Carbonara is a pasta dish with eggs").
+   - ONLY extract general knowledge if it's a specific, factual concept the user is engaging with.
 4. RECOMMENDATION: SHORT, specific advice (under 100 chars) WITH PERSONALITY!
    - If User is CODING: Suggest a refactor or best practice ONLY if you see a CLEAR improvement.
    - DO NOT suggest things just to speak. If code looks good, offer a compliment or say nothing (null).
