@@ -10,7 +10,7 @@ frontend/build/
 frontend/.DS_Store
 
 # Logs & Temp
-##*.log
+*.log
 
 # User Data & Memory (Privacy)
 data/
