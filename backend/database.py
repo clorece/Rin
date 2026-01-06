@@ -151,6 +151,25 @@ def init_db():
     c.execute('CREATE INDEX IF NOT EXISTS idx_rin_insights_shared ON rin_insights(shared_with_user)')
     c.execute('CREATE INDEX IF NOT EXISTS idx_context_embeddings_hash ON context_embeddings(context_hash)')
     
+    # ============== Staging Knowledge Base (Runtime Unknowns) ==============
+    
+    # Staging KB: Runtime unknowns processed by Gemini, awaiting developer classification
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS staging_knowledge (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            knowledge_type TEXT NOT NULL,     -- 'pattern', 'reaction', 'context_mapping', 'extracted'
+            context_signature TEXT,           -- app:title hash for matching
+            content TEXT NOT NULL,            -- The actual knowledge (JSON)
+            gemini_response TEXT,             -- Raw Gemini response that generated this
+            is_general INTEGER DEFAULT 1,     -- 1 = general (promote to Gemini KB), 0 = user-specific
+            promoted INTEGER DEFAULT 0,       -- 1 = already promoted to Gemini KB
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    c.execute('CREATE INDEX IF NOT EXISTS idx_staging_type ON staging_knowledge(knowledge_type)')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_staging_promoted ON staging_knowledge(promoted)')
+    
     conn.commit()
     conn.close()
 
@@ -599,6 +618,381 @@ def get_knowledge_summary() -> dict:
         "insights": {"total": insights['total'], "shared": insights['shared'] or 0},
         "contexts_learned": {"unique": contexts['total'], "total_occurrences": contexts['occurrences'] or 0}
     }
+
+
+# ============== Knowledge Base Loader Functions ==============
+
+# Cache for loaded KBs (avoid re-reading files every call)
+_kb_cache = {
+    "core": None,
+    "gemini": None,
+    "core_mtime": 0,
+    "gemini_mtime": 0
+}
+
+def load_core_kb() -> dict:
+    """Load the Core Knowledge Base from JSON file."""
+    global _kb_cache
+    kb_path = os.path.join(os.path.dirname(__file__), "..", "knowledge", "core_kb.json")
+    
+    try:
+        mtime = os.path.getmtime(kb_path)
+        if _kb_cache["core"] is None or mtime > _kb_cache["core_mtime"]:
+            with open(kb_path, "r", encoding="utf-8") as f:
+                _kb_cache["core"] = json.load(f)
+                _kb_cache["core_mtime"] = mtime
+        return _kb_cache["core"]
+    except Exception as e:
+        print(f"[KB] Failed to load core_kb.json: {e}")
+        return {}
+
+
+def load_gemini_kb() -> dict:
+    """Load the Gemini Knowledge Base from JSON file."""
+    global _kb_cache
+    kb_path = os.path.join(os.path.dirname(__file__), "..", "knowledge", "gemini_kb.json")
+    
+    try:
+        mtime = os.path.getmtime(kb_path)
+        if _kb_cache["gemini"] is None or mtime > _kb_cache["gemini_mtime"]:
+            with open(kb_path, "r", encoding="utf-8") as f:
+                _kb_cache["gemini"] = json.load(f)
+                _kb_cache["gemini_mtime"] = mtime
+        return _kb_cache["gemini"]
+    except Exception as e:
+        print(f"[KB] Failed to load gemini_kb.json: {e}")
+        return {}
+
+
+def save_core_kb(data: dict) -> bool:
+    """Save the Core Knowledge Base to JSON file."""
+    global _kb_cache
+    kb_path = os.path.join(os.path.dirname(__file__), "..", "knowledge", "core_kb.json")
+    
+    try:
+        with open(kb_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        _kb_cache["core"] = data
+        _kb_cache["core_mtime"] = os.path.getmtime(kb_path)
+        print(f"[KB] Saved core_kb.json")
+        return True
+    except Exception as e:
+        print(f"[KB] Failed to save core_kb.json: {e}")
+        return False
+
+
+def save_gemini_kb(data: dict) -> bool:
+    """Save the Gemini Knowledge Base to JSON file."""
+    global _kb_cache
+    kb_path = os.path.join(os.path.dirname(__file__), "..", "knowledge", "gemini_kb.json")
+    
+    try:
+        with open(kb_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        _kb_cache["gemini"] = data
+        _kb_cache["gemini_mtime"] = os.path.getmtime(kb_path)
+        print(f"[KB] Saved gemini_kb.json")
+        return True
+    except Exception as e:
+        print(f"[KB] Failed to save gemini_kb.json: {e}")
+        return False
+
+
+def add_to_core_kb(section: str, key: str, data: dict) -> bool:
+    """
+    Add an entry to the Core Knowledge Base.
+    
+    Args:
+        section: 'apps', 'contexts', 'behaviors', 'capabilities'
+        key: Unique key for this entry
+        data: The entry data
+    """
+    kb = load_core_kb()
+    if not kb:
+        return False
+    
+    if section not in kb:
+        kb[section] = {}
+    
+    # Don't overwrite existing entries
+    if key in kb[section]:
+        print(f"[KB] Core KB already has {section}.{key}, skipping")
+        return False
+    
+    kb[section][key] = data
+    kb["metadata"]["last_updated"] = datetime.now().strftime("%Y-%m-%d")
+    
+    return save_core_kb(kb)
+
+
+def add_to_gemini_kb(section: str, key: str, data: dict) -> bool:
+    """
+    Add an entry to the Gemini Knowledge Base.
+    
+    Args:
+        section: 'learned_patterns', 'learned_reactions', 'context_mappings', 'extracted_knowledge'
+        key: Unique key for this entry
+        data: The entry data
+    """
+    kb = load_gemini_kb()
+    if not kb:
+        return False
+    
+    if section not in kb:
+        kb[section] = {}
+    
+    # Update if exists, otherwise add
+    kb[section][key] = data
+    kb["metadata"]["last_updated"] = datetime.now().strftime("%Y-%m-%d")
+    kb["metadata"]["total_entries"] = sum(
+        len(v) for k, v in kb.items() 
+        if isinstance(v, dict) and k not in ["version", "metadata"]
+    )
+    
+    return save_gemini_kb(kb)
+
+
+def promote_staging_to_gemini_kb(entry_id: int) -> bool:
+    """
+    Promote a staging KB entry directly to Gemini KB.
+    Called automatically during learning or manually by developer.
+    """
+    conn = get_db_connection()
+    c = conn.cursor()
+    
+    c.execute("SELECT * FROM staging_knowledge WHERE id = ?", (entry_id,))
+    row = c.fetchone()
+    conn.close()
+    
+    if not row:
+        return False
+    
+    entry = dict(row)
+    content = json.loads(entry["content"]) if entry["content"] else {}
+    
+    # Determine section based on knowledge_type
+    section_map = {
+        "pattern": "learned_patterns",
+        "reaction": "learned_reactions",
+        "context_mapping": "context_mappings",
+        "extracted": "extracted_knowledge"
+    }
+    section = section_map.get(entry["knowledge_type"], "learned_patterns")
+    
+    # Create key from context signature or id
+    key = entry["context_signature"] or f"auto_{entry_id}"
+    key = key.replace(":", "_").replace(" ", "_").lower()
+    
+    # Add to Gemini KB
+    success = add_to_gemini_kb(section, key, {
+        **content,
+        "source": "staging",
+        "staging_id": entry_id,
+        "created_at": entry.get("created_at", datetime.now().isoformat())
+    })
+    
+    if success:
+        mark_staging_promoted(entry_id)
+        print(f"[KB] Promoted staging entry {entry_id} to Gemini KB")
+    
+    return success
+
+
+def auto_promote_confident_staging() -> int:
+    """
+    Automatically promote staging entries that appear frequently.
+    Called during deep thinking to grow Gemini KB.
+    Returns count of promoted entries.
+    """
+    entries = get_staging_kb_entries(promoted=False)
+    promoted_count = 0
+    
+    # Group by context signature to find patterns
+    signature_counts = {}
+    for entry in entries:
+        sig = entry.get("context_signature", "")
+        if sig:
+            signature_counts[sig] = signature_counts.get(sig, 0) + 1
+    
+    # Promote signatures that appear 3+ times (confident pattern)
+    for sig, count in signature_counts.items():
+        if count >= 3:
+            # Find the first entry with this signature
+            for entry in entries:
+                if entry.get("context_signature") == sig and not entry.get("promoted"):
+                    if promote_staging_to_gemini_kb(entry["id"]):
+                        promoted_count += 1
+                    break
+    
+    if promoted_count > 0:
+        print(f"[KB] Auto-promoted {promoted_count} confident patterns to Gemini KB")
+    
+    return promoted_count
+
+def add_to_staging_kb(knowledge_type: str, context_signature: str, 
+                       content: dict, gemini_response: str = None,
+                       is_general: bool = True) -> int:
+    """Add knowledge from Gemini to staging for classification."""
+    conn = get_db_connection()
+    c = conn.cursor()
+    
+    c.execute("""
+        INSERT INTO staging_knowledge 
+        (knowledge_type, context_signature, content, gemini_response, is_general)
+        VALUES (?, ?, ?, ?, ?)
+    """, (knowledge_type, context_signature, json.dumps(content), 
+          gemini_response, 1 if is_general else 0))
+    
+    row_id = c.lastrowid
+    conn.commit()
+    conn.close()
+    return row_id
+
+
+def get_staging_kb_entries(promoted: bool = False, limit: int = 100) -> list:
+    """Get entries from staging KB."""
+    conn = get_db_connection()
+    c = conn.cursor()
+    
+    c.execute("""
+        SELECT * FROM staging_knowledge 
+        WHERE promoted = ?
+        ORDER BY created_at DESC
+        LIMIT ?
+    """, (1 if promoted else 0, limit))
+    
+    rows = c.fetchall()
+    conn.close()
+    
+    result = []
+    for row in rows:
+        d = dict(row)
+        d['content'] = json.loads(d['content']) if d['content'] else {}
+        result.append(d)
+    return result
+
+
+def mark_staging_promoted(entry_id: int):
+    """Mark a staging entry as promoted to Gemini KB."""
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("UPDATE staging_knowledge SET promoted = 1 WHERE id = ?", (entry_id,))
+    conn.commit()
+    conn.close()
+
+
+# ============== Knowledge Priority Chain Lookup ==============
+
+def lookup_app_in_kb(app_name: str, window_title: str = "") -> dict:
+    """
+    Query all knowledge bases in priority order for app/context info.
+    Priority: User KB → Gemini KB → Core KB
+    
+    Returns: {
+        "found": bool,
+        "source": "user" | "gemini" | "core" | None,
+        "app_info": {...} or None,
+        "context_info": {...} or None,
+        "reaction": str or None
+    }
+    """
+    result = {
+        "found": False,
+        "source": None,
+        "app_info": None,
+        "context_info": None,
+        "reaction": None
+    }
+    
+    app_lower = app_name.lower() if app_name else ""
+    title_lower = window_title.lower() if window_title else ""
+    
+    # 1. Check User KB (context_embeddings for seen contexts)
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("""
+        SELECT * FROM context_embeddings 
+        WHERE app_name LIKE ? OR window_title LIKE ?
+        ORDER BY occurrence_count DESC
+        LIMIT 1
+    """, (f"%{app_lower}%", f"%{title_lower}%"))
+    user_match = c.fetchone()
+    conn.close()
+    
+    if user_match:
+        result["found"] = True
+        result["source"] = "user"
+        result["context_info"] = dict(user_match)
+        # User KB doesn't store reactions directly, but has descriptions
+        return result
+    
+    # 2. Check Gemini KB
+    gemini_kb = load_gemini_kb()
+    
+    # Check learned_reactions
+    for key, reaction_data in gemini_kb.get("learned_reactions", {}).items():
+        if key.startswith("_"): continue  # Skip templates
+        sig = reaction_data.get("context_signature", "").lower()
+        if app_lower in sig or title_lower in sig:
+            result["found"] = True
+            result["source"] = "gemini"
+            result["reaction"] = reaction_data.get("reaction_text")
+            result["context_info"] = reaction_data
+            return result
+    
+    # Check context_mappings
+    for key, mapping in gemini_kb.get("context_mappings", {}).items():
+        if key.startswith("_"): continue
+        if app_lower == mapping.get("app_name", "").lower():
+            result["found"] = True
+            result["source"] = "gemini"
+            result["context_info"] = mapping
+            return result
+    
+    # 3. Check Core KB
+    core_kb = load_core_kb()
+    
+    # Check apps
+    for app_key, app_data in core_kb.get("apps", {}).items():
+        patterns = app_data.get("patterns", [])
+        for pattern in patterns:
+            if pattern.lower() in app_lower or app_lower in pattern.lower():
+                result["found"] = True
+                result["source"] = "core"
+                result["app_info"] = app_data
+                result["reaction"] = app_data.get("default_reaction")
+                return result
+    
+    # Check contexts (for title matching like YouTube)
+    for ctx_key, ctx_data in core_kb.get("contexts", {}).items():
+        title_patterns = ctx_data.get("title_contains", [])
+        for pattern in title_patterns:
+            if pattern.lower() in title_lower:
+                result["found"] = True
+                result["source"] = "core"
+                result["context_info"] = ctx_data
+                result["reaction"] = ctx_data.get("default_reaction")
+                return result
+    
+    return result
+
+
+def get_behavior_policy(behavior_name: str) -> dict:
+    """Get behavior policy from Core KB."""
+    core_kb = load_core_kb()
+    return core_kb.get("behaviors", {}).get(behavior_name, {})
+
+
+def get_personality() -> dict:
+    """Get Rin's personality definition from Core KB."""
+    core_kb = load_core_kb()
+    return core_kb.get("personality", {})
+
+
+def get_capability_routing(task: str) -> dict:
+    """Get capability routing for a task from Core KB."""
+    core_kb = load_core_kb()
+    return core_kb.get("capabilities", {}).get(task, {"handler": "gemini", "requires_gemini": True})
 
 
 # Initialize on import

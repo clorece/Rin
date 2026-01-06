@@ -13,7 +13,7 @@ def get_active_window_title():
         # Prevent information leakage via stack trace
         return "Unknown"
 
-def capture_screen_base64(scale=0.75):
+def capture_screen_base64(scale=1.0):
     """
     Captures the primary monitor, resizes it (for speed/LLM limits), 
     and returns a base64 string.

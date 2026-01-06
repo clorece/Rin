@@ -402,10 +402,11 @@ class RinMind:
             print(f"Error in chat: {e}")
             return "I'm having trouble thinking right now."
 
-    async def chat_response_async(self, history, user_message, audio_bytes=None):
+    async def chat_response_async(self, history, user_message, audio_bytes=None, image_bytes=None):
         """
-        Generates a chat response with optional audio context (Async).
+        Generates a chat response with optional audio and visual context (Async).
         If audio_bytes is provided, Rin can "hear" the current audio.
+        If image_bytes is provided, Rin can "see" the current screen.
         """
         if not self.model:
             return "I need a GEMINI_API_KEY to speak properly."
@@ -419,10 +420,17 @@ class RinMind:
                 f"You are Rin.{user_context}{episodic_context}\n\n"
             )
             
-            if audio_bytes:
-                 prompt_text += "[CURRENT SENSORY INPUT (NOW)]\n- Audio: <Attached Audio Stream> (If silence, assume NO music is playing).\n"
+            prompt_text += "[CURRENT SENSORY INPUT (NOW)]\n"
+            
+            if image_bytes:
+                prompt_text += "- Vision: <Attached Screenshot> (This is the user's CURRENT screen. You can see everything on it.)\n"
             else:
-                 prompt_text += "[CURRENT SENSORY INPUT (NOW)]\n- Audio: Silence (No audio detected).\n"
+                prompt_text += "- Vision: No screen capture available.\n"
+            
+            if audio_bytes:
+                prompt_text += "- Audio: <Attached Audio Stream> (If silence, assume NO music is playing).\n"
+            else:
+                prompt_text += "- Audio: Silence (No audio detected).\n"
 
             prompt_text += (
                 "\nSYSTEM INSTRUCTIONS:\n"
@@ -432,14 +440,24 @@ class RinMind:
                 "4. SILENCE LOGIC: Silence is NEUTRAL. It does NOT mean 'focus' unless the user is actively coding or writing. If it's silent and they are browsing, just chill or make a casual comment.\n"
                 "5. KEY: [EPISODIC HISTORY] is past. [CURRENT INPUT] is now. Don't mix them up.\n"
                 "6. VIBE: Casual, internet-savvy, natural. Use lower caps if it fits the vibe. No formal headings.\n"
-                "7. ANTI-REPETITION: Check history. Don't repeat yourself."
+                "7. ANTI-REPETITION: Check history. Don't repeat yourself.\n"
+                "8. SCREEN READING: If you have a screenshot attached, you can READ text on the screen including video titles, code, chat messages, etc."
             )
 
             
             prompt_text += f"\n\nUser: {user_message}"
             
-            # Build content parts
-            content_parts = [prompt_text]
+            # Build content parts - ORDER MATTERS: image first, then text, then audio
+            content_parts = []
+            
+            if image_bytes:
+                import base64
+                content_parts.append({
+                    "mime_type": "image/jpeg",
+                    "data": base64.b64encode(image_bytes).decode("utf-8")
+                })
+            
+            content_parts.append(prompt_text)
             
             if audio_bytes:
                 content_parts.append({
@@ -449,7 +467,7 @@ class RinMind:
             
             # Use generate_content for multimodal, not chat (which doesn't support audio inline)
             response = await self.model.generate_content_async(content_parts)
-            details = "Visual + Audio" if audio_bytes else "Visual Only"
+            details = f"{'Visual' if image_bytes else 'No Visual'} + {'Audio' if audio_bytes else 'No Audio'}"
             log_api_usage("chat_response_async", "Success", details)
             return response.text
             

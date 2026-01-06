@@ -28,6 +28,9 @@ from knowledge_engine import knowledge_engine
 from ears import ears
 from logger import log_activity, clear_activity_log
 from thinking_engine import thinking_engine, ThinkingState
+from semantic_layer import semantic_layer
+from fog_layer import fog_layer
+from knowledge_gate import knowledge_gate, GateDecision
 
 # -- Data Models --
 class ChatMessage(BaseModel):
@@ -247,7 +250,53 @@ async def run_deep_thinking():
         # Pattern analysis
         pattern_engine.analyze_all(force=True)
         
-        print("[Thinking] Deep thinking cycle completed")
+        # ============== PROACTIVE PRECOMPUTATION ==============
+        # During idle, process any pending fog episodes in batch
+        
+        pending_episodes = fog_layer.get_pending_episodes()
+        if pending_episodes:
+            print(f"[Precompute] Processing {len(pending_episodes)} pending episodes")
+            
+            for episode in pending_episodes:
+                # Skip episodes with no significant data
+                if episode.observation_count < 2:
+                    continue
+                
+                # Extract learnings from episode locally (no Gemini)
+                episode_summary = episode.get_summary()
+                
+                # Store episode metadata in staging for potential promotion
+                if episode.primary_app and episode.primary_activity:
+                    database.add_to_staging_kb(
+                        knowledge_type="pattern",
+                        context_signature=f"{episode.primary_app}:{episode.primary_activity}",
+                        content={
+                            "app": episode.primary_app,
+                            "activity": episode.primary_activity,
+                            "platform": episode.primary_platform,
+                            "duration_min": episode_summary.get("duration_minutes", 0),
+                            "observations": episode_summary.get("observations", 0),
+                            "passive": episode.is_passive,
+                            "focused": episode.is_focused
+                        },
+                        is_general=True  # App patterns are generally applicable
+                    )
+            
+            print(f"[Precompute] Stored {len(pending_episodes)} episode patterns to Staging KB")
+        
+        # Also process any unknown contexts that were queued
+        gate_stats = knowledge_gate.get_stats()
+        if gate_stats.get("unknown_queued", 0) > 0:
+            print(f"[Precompute] {gate_stats['unknown_queued']} unknown contexts queued for batch analysis")
+            # Future: batch these to Gemini in one call during idle
+        
+        # ============== KB SELF-IMPROVEMENT ==============
+        # Auto-promote confident staging entries to Gemini KB
+        promoted = database.auto_promote_confident_staging()
+        if promoted > 0:
+            print(f"[KB Growth] Gemini KB grew by {promoted} entries!")
+        
+        print("[Thinking] Deep thinking cycle completed (with precomputation)")
         
     except Exception as e:
         print(f"[Thinking] Deep thinking error: {e}")
@@ -275,18 +324,106 @@ def health_check():
     return {"status": "ok", "learning_active": activity_collector.is_running()}
 
 
+# ============== DEVELOPER WORKFLOW: STAGING KB MANAGEMENT ==============
+
+@app.get("/dev/staging")
+def get_staging_entries():
+    """Get all unpromoted staging KB entries for review."""
+    entries = database.get_staging_kb_entries(promoted=False)
+    return {
+        "count": len(entries),
+        "entries": entries
+    }
+
+
+@app.post("/dev/staging/promote/{entry_id}")
+def promote_staging_entry(entry_id: int):
+    """
+    Mark a staging entry as promoted (developer approved for Gemini KB).
+    The actual JSON file update should be done manually or via export.
+    """
+    try:
+        database.mark_staging_promoted(entry_id)
+        return {"status": "promoted", "entry_id": entry_id}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.get("/dev/staging/export")
+def export_staging_for_promotion():
+    """
+    Export unpromoted staging entries in Gemini KB format.
+    Copy this output to gemini_kb.json manually.
+    """
+    entries = database.get_staging_kb_entries(promoted=False)
+    
+    # Convert to Gemini KB format
+    export = {
+        "learned_patterns": {},
+        "context_mappings": {},
+        "learned_reactions": {}
+    }
+    
+    for entry in entries:
+        key = f"auto_{entry['id']}"
+        content = entry.get("content", {})
+        
+        if entry["knowledge_type"] == "pattern":
+            export["learned_patterns"][key] = {
+                "pattern_id": key,
+                "trigger": content.get("app", "unknown"),
+                "classification": content.get("activity", "unknown"),
+                "confidence": 0.7,
+                "source_episode": entry.get("context_signature", ""),
+                "created_at": entry.get("created_at", "")
+            }
+        elif entry["knowledge_type"] == "reaction":
+            export["learned_reactions"][key] = content
+        elif entry["knowledge_type"] == "context_mapping":
+            export["context_mappings"][key] = content
+    
+    return {
+        "count": len(entries),
+        "gemini_kb_additions": export,
+        "instructions": "Copy the relevant sections to knowledge/gemini_kb.json"
+    }
+
+
 @app.get("/api/usage")
 def get_api_usage():
     """Get real-time API usage statistics for this session."""
     stats = get_api_session_stats()
     thinking_stats = thinking_engine.get_status().get("stats", {})
+    gate_stats = knowledge_gate.get_stats()
+    fog_stats = fog_layer.get_stats()
+    
+    # Calculate Workload Distribution
+    # Rin (Local) = Knowledge Gate hits + Deduplicated + Edge Filtered
+    rin_ops = gate_stats.get("known_hits", 0) + thinking_stats.get("observations_deduplicated", 0) + thinking_stats.get("edge_filtered", 0)
+    # Gemini (Cloud) = Actual API calls
+    gemini_ops = stats.get("total_calls", 0)
+    
+    total_ops = rin_ops + gemini_ops
+    rin_pct = (rin_ops / total_ops * 100) if total_ops > 0 else 0.0
+    gemini_pct = (gemini_ops / total_ops * 100) if total_ops > 0 else 0.0
+    
     return {
         "gemini": stats,
         "thinking": {
             "observations_total": thinking_stats.get("observations_total", 0),
             "observations_deduplicated": thinking_stats.get("observations_deduplicated", 0),
             "significant_count": thinking_stats.get("significant_count", 0),
-            "gemini_calls_from_thinking": thinking_stats.get("gemini_calls", 0)
+            "gemini_calls_from_thinking": thinking_stats.get("gemini_consulted", 0),
+            "edge_filtered": thinking_stats.get("edge_filtered", 0)
+        },
+        "edge": {
+            "knowledge_gate": gate_stats,
+            "fog_layer": fog_stats
+        },
+        "distribution": {
+            "rin_score": round(rin_pct, 1),
+            "gemini_score": round(gemini_pct, 1),
+            "message": f"Rin is handling {rin_pct:.1f}% of the workload locally."
         }
     }
 
@@ -395,7 +532,7 @@ async def get_screen_capture(analyze: bool = False):
     }
 
 async def process_observation(window_title, image_b64, trigger_type=None):
-    """Background task to analyze screen and optionally buffer for thinking."""
+    """Background task to analyze screen using Edge-First architecture."""
     try:
         image_bytes = base64.b64decode(image_b64)
         
@@ -403,17 +540,8 @@ async def process_observation(window_title, image_b64, trigger_type=None):
         audio_bytes = ears.get_recent_audio_bytes(duration_seconds=5.0)
         if audio_bytes:
             print(f"[Ears] Captured {len(audio_bytes)} bytes of audio context")
-        else:
-            print(f"[Ears] No audio captured (running={ears.running}, buffer_size={len(ears.audio_buffer)})")
         
-        # Always get basic reaction for immediate UI feedback
-        result = await mind.analyze_image_async(image_bytes, audio_bytes=audio_bytes, trigger_type=trigger_type)
-        
-        # Store in DB
-        content = f"User is processing: {window_title}. Observation: {result['description']}"
-        database.add_memory("observation", content, meta={"image_path": "todo", "reaction": result['reaction']})
-        
-        # Get app info for learning
+        # Get app info early for routing decisions
         app_name = "unknown"
         app_category = "other"
         try:
@@ -423,6 +551,68 @@ async def process_observation(window_title, image_b64, trigger_type=None):
             app_category = tracker._categorize_app(app_name or "", window_title or "")
         except:
             pass
+        
+        # ============== EDGE-FIRST ARCHITECTURE ==============
+        
+        # Layer 2: Semantic Compression - Extract local features
+        visual_diff = getattr(process_observation, '_last_visual_diff', 0.0)
+        features = semantic_layer.extract_features(
+            window_title=window_title or "",
+            app_name=app_name or "",
+            audio_bytes=audio_bytes,
+            visual_diff=visual_diff
+        )
+        
+        # Layer 3: Knowledge Gate - Check if we already know this context
+        gate_result = knowledge_gate.check(
+            window_title=window_title or "",
+            app_name=app_name or "",
+            features=features
+        )
+        
+        # Decision based on Knowledge Gate
+        result = {"reaction": "", "description": ""}
+        
+        if gate_result.decision in [GateDecision.KNOWN_USE_TEMPLATE, GateDecision.KNOWN_USE_CACHE]:
+            # Known context! Use cached reaction - NO GEMINI CALL
+            result["description"] = f"[Local] {gate_result.source} KB: {app_name}"
+            result["reaction"] = gate_result.reaction or ""
+            print(f"[Edge] Known context from {gate_result.source} KB - Gemini saved!")
+            log_activity("EDGE", f"Known: {app_name} ({gate_result.source})")
+            
+        elif gate_result.decision == GateDecision.KNOWN_SKIP:
+            # Known but no reaction needed - silently skip
+            result["description"] = f"[Local] Recognized: {app_name}"
+            # Don't log this - it's noise
+            
+        elif gate_result.decision == GateDecision.UNKNOWN_URGENT:
+            # Unknown and urgent - call Gemini now
+            print(f"[Edge] Unknown urgent context - calling Gemini")
+            result = await mind.analyze_image_async(image_bytes, audio_bytes=audio_bytes, trigger_type=trigger_type)
+            log_activity("GEMINI", f"Urgent: {app_name}")
+            
+        else:
+            # Unknown but not urgent - still call Gemini for now, but log
+            # (In future: batch these instead)
+            print(f"[Edge] Unknown context queued - calling Gemini (TODO: batch)")
+            result = await mind.analyze_image_async(image_bytes, audio_bytes=audio_bytes, trigger_type=trigger_type)
+            log_activity("GEMINI", f"Queued: {app_name}")
+        
+        # Layer 1: Fog Layer - Add to episode for aggregation
+        closed_episode = fog_layer.add_observation(
+            window_title=window_title or "",
+            app_name=app_name or "",
+            features=features,
+            image_bytes=image_bytes if gate_result.should_call_gemini else None,
+            audio_bytes=audio_bytes if gate_result.should_call_gemini else None
+        )
+        
+        if closed_episode:
+            print(f"[Fog] Episode closed: {closed_episode.get_summary()}")
+        
+        # Store in DB (always, for history)
+        content = f"User is processing: {window_title}. Observation: {result['description']}"
+        database.add_memory("observation", content, meta={"image_path": "todo", "reaction": result['reaction']})
         
         # Rule-based knowledge extraction (still runs - it's cheap/local)
         knowledge_result = knowledge_engine.process_observation(
@@ -486,15 +676,17 @@ async def process_observation(window_title, image_b64, trigger_type=None):
         # Log the observation
         log_activity("OBSERVATION", f"Window: {window_title}")
         
-        # Add to reaction queue for frontend
-        reaction_queue.append({
-            "type": "reaction",
-            "content": result['reaction'],
-            "description": result['description']
-        })
-        
-        # Log the reaction
-        log_activity("REACTION", f"{result['description']}")
+        # Add to reaction queue for frontend ONLY if there's actual content to show
+        # Skip local-only recognitions that have no reaction
+        if result.get('reaction') or (result.get('description') and not result['description'].startswith('[Local]')):
+            reaction_queue.append({
+                "type": "reaction",
+                "content": result['reaction'],
+                "description": result['description']
+            })
+            
+            # Log the reaction only for meaningful ones
+            log_activity("REACTION", f"{result['description']}")
         
     except Exception as e:
         print(f"Analysis failed: {e}")
@@ -567,6 +759,15 @@ async def chat_endpoint(msg: ChatMessage):
     # Record user message
     database.add_memory("chat", f"User: {msg.message}")
     
+    # Capture current screen for visual context
+    image_bytes = None
+    try:
+        screen_b64 = capture_screen_base64()
+        image_bytes = base64.b64decode(screen_b64)
+        print(f"[Chat] Including screen capture ({len(image_bytes)} bytes)")
+    except Exception as e:
+        print(f"[Chat] Failed to capture screen: {e}")
+    
     # Capture current audio for context (if ears are active)
     audio_bytes = None
     if ears.running:
@@ -574,8 +775,8 @@ async def chat_endpoint(msg: ChatMessage):
         if audio_bytes:
             print(f"[Chat] Including {len(audio_bytes)} bytes of audio context")
     
-    # Generate response (with optional audio context)
-    response_text = await mind.chat_response_async(formatted_history, msg.message, audio_bytes=audio_bytes)
+    # Generate response (with visual and audio context)
+    response_text = await mind.chat_response_async(formatted_history, msg.message, audio_bytes=audio_bytes, image_bytes=image_bytes)
     
     # Record model response (full text)
     database.add_memory("chat", f"Rin: {response_text}")

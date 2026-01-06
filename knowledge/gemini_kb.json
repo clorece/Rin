@@ -1,0 +1,53 @@
+{
+  "version": "1.0.0",
+  "metadata": {
+    "description": "Gemini Knowledge Base - Distilled knowledge from Gemini during development",
+    "last_updated": "2026-01-05",
+    "total_entries": 5
+  },
+  "learned_patterns": {
+    "_template": {
+      "pattern_id": "string",
+      "trigger": "description of what triggers this pattern",
+      "classification": "what Gemini determined this to be",
+      "confidence": 0.0,
+      "source_episode": "episode ID where this was learned",
+      "created_at": "timestamp"
+    },
+    "test_pattern": {
+      "trigger": "test",
+      "confidence": 0.8
+    }
+  },
+  "learned_reactions": {
+    "_template": {
+      "context_signature": "app:context hash",
+      "reaction_text": "The reaction Gemini generated",
+      "tone": "bubbly|calm|supportive|etc",
+      "usage_count": 0,
+      "positive_feedback": 0,
+      "created_at": "timestamp"
+    }
+  },
+  "context_mappings": {
+    "_template": {
+      "window_title_pattern": "regex or contains",
+      "app_name": "string",
+      "mapped_category": "development|media|social|etc",
+      "mapped_behavior": "passive|active|social|etc",
+      "gemini_insight": "What Gemini said about this context",
+      "created_at": "timestamp"
+    }
+  },
+  "extracted_knowledge": {
+    "_template": {
+      "category": "interest|workflow|habit|preference",
+      "key": "short identifier",
+      "value": "what was learned",
+      "is_general": true,
+      "confidence": 0.0,
+      "evidence_count": 0,
+      "created_at": "timestamp"
+    }
+  }
+}

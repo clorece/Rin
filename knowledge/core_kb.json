@@ -1,0 +1,261 @@
+{
+    "version": "1.0.0",
+    "metadata": {
+        "description": "Core Knowledge Base - Developer-managed foundation for Rin",
+        "last_updated": "2026-01-05"
+    },
+    "apps": {
+        "spotify": {
+            "name": "Spotify",
+            "category": "media",
+            "subcategory": "music",
+            "patterns": [
+                "spotify.exe",
+                "Spotify"
+            ],
+            "default_reaction": "Ooh, music time~",
+            "behavior": "passive_consumption"
+        },
+        "discord": {
+            "name": "Discord",
+            "category": "communication",
+            "subcategory": "chat",
+            "patterns": [
+                "discord.exe",
+                "Discord"
+            ],
+            "default_reaction": "Chatting with friends?",
+            "behavior": "social"
+        },
+        "vscode": {
+            "name": "Visual Studio Code",
+            "category": "development",
+            "subcategory": "ide",
+            "patterns": [
+                "Code.exe",
+                "Visual Studio Code"
+            ],
+            "default_reaction": "Time to code!",
+            "behavior": "active_creation"
+        },
+        "chrome": {
+            "name": "Google Chrome",
+            "category": "browser",
+            "subcategory": "web",
+            "patterns": [
+                "chrome.exe",
+                "Google Chrome"
+            ],
+            "default_reaction": null,
+            "behavior": "context_dependent"
+        },
+        "steam": {
+            "name": "Steam",
+            "category": "gaming",
+            "subcategory": "launcher",
+            "patterns": [
+                "steam.exe",
+                "Steam"
+            ],
+            "default_reaction": "Game time!",
+            "behavior": "gaming"
+        },
+        "explorer": {
+            "name": "File Explorer",
+            "category": "system",
+            "subcategory": "files",
+            "patterns": [
+                "explorer.exe",
+                "File Explorer"
+            ],
+            "default_reaction": null,
+            "behavior": "navigation"
+        },
+        "notion": {
+            "name": "Notion",
+            "category": "productivity",
+            "subcategory": "notes",
+            "patterns": [
+                "Notion.exe",
+                "Notion"
+            ],
+            "default_reaction": "Organizing thoughts?",
+            "behavior": "active_creation"
+        },
+        "obs": {
+            "name": "OBS Studio",
+            "category": "media",
+            "subcategory": "streaming",
+            "patterns": [
+                "obs64.exe",
+                "OBS"
+            ],
+            "default_reaction": "Going live?",
+            "behavior": "broadcasting"
+        },
+        "figma": {
+            "name": "Figma",
+            "category": "design",
+            "subcategory": "ui",
+            "patterns": [
+                "Figma.exe",
+                "Figma"
+            ],
+            "default_reaction": "Design time!",
+            "behavior": "active_creation"
+        },
+        "slack": {
+            "name": "Slack",
+            "category": "communication",
+            "subcategory": "work",
+            "patterns": [
+                "slack.exe",
+                "Slack"
+            ],
+            "default_reaction": "Work chat?",
+            "behavior": "social"
+        }
+    },
+    "contexts": {
+        "youtube_video": {
+            "title_contains": [
+                "YouTube",
+                "youtube.com"
+            ],
+            "type": "media",
+            "subtype": "video",
+            "default_reaction": "Ooh, watching something?",
+            "behavior": "passive_consumption"
+        },
+        "github": {
+            "title_contains": [
+                "GitHub",
+                "github.com"
+            ],
+            "type": "development",
+            "subtype": "repository",
+            "default_reaction": "Checking out some code?",
+            "behavior": "research"
+        },
+        "stackoverflow": {
+            "title_contains": [
+                "Stack Overflow",
+                "stackoverflow.com"
+            ],
+            "type": "development",
+            "subtype": "research",
+            "default_reaction": "Looking for answers?",
+            "behavior": "research"
+        },
+        "reddit": {
+            "title_contains": [
+                "Reddit",
+                "reddit.com"
+            ],
+            "type": "social",
+            "subtype": "forum",
+            "default_reaction": "Scrolling through Reddit?",
+            "behavior": "browsing"
+        },
+        "twitter": {
+            "title_contains": [
+                "Twitter",
+                "X -",
+                "x.com"
+            ],
+            "type": "social",
+            "subtype": "microblog",
+            "default_reaction": null,
+            "behavior": "browsing"
+        },
+        "twitch": {
+            "title_contains": [
+                "Twitch",
+                "twitch.tv"
+            ],
+            "type": "media",
+            "subtype": "streaming",
+            "default_reaction": "Watching a stream?",
+            "behavior": "passive_consumption"
+        }
+    },
+    "personality": {
+        "name": "Rin",
+        "role": "A devoted and knowledgeable digital companion",
+        "tone": [
+            "bubbly",
+            "supportive",
+            "reactive",
+            "warm"
+        ],
+        "speech_style": {
+            "use_casual_language": true,
+            "avoid_formal_headings": true,
+            "use_tildes": true,
+            "max_sentence_length": 1
+        },
+        "behaviors": {
+            "greet_on_context_change": true,
+            "stay_quiet_during_focus": true,
+            "cheer_during_gaming": true,
+            "support_during_work": true
+        }
+    },
+    "capabilities": {
+        "app_recognition": {
+            "handler": "local",
+            "requires_gemini": false
+        },
+        "context_classification": {
+            "handler": "knowledge_gate",
+            "requires_gemini": "if_unknown"
+        },
+        "simple_reaction": {
+            "handler": "template",
+            "requires_gemini": false
+        },
+        "code_analysis": {
+            "handler": "gemini",
+            "requires_gemini": true
+        },
+        "complex_qa": {
+            "handler": "gemini",
+            "requires_gemini": true
+        },
+        "learning_extraction": {
+            "handler": "gemini_batch",
+            "requires_gemini": true
+        },
+        "proactive_insight": {
+            "handler": "gemini_scheduled",
+            "requires_gemini": true
+        }
+    },
+    "behaviors": {
+        "passive_consumption": {
+            "description": "User is watching/listening, not creating",
+            "gemini_policy": "minimal",
+            "observation_interval": 300
+        },
+        "active_creation": {
+            "description": "User is coding, writing, designing",
+            "gemini_policy": "on_significant_change",
+            "observation_interval": 60
+        },
+        "social": {
+            "description": "User is communicating",
+            "gemini_policy": "minimal",
+            "observation_interval": 120
+        },
+        "gaming": {
+            "description": "User is playing games",
+            "gemini_policy": "minimal",
+            "observation_interval": 300
+        },
+        "navigation": {
+            "description": "User is browsing files or switching contexts",
+            "gemini_policy": "skip",
+            "observation_interval": 0
+        }
+    }
+}
