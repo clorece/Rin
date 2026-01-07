@@ -10,7 +10,7 @@ frontend/build/
 frontend/.DS_Store
 
 # Logs & Temp
-*.log
+logs/
 
 # User Data & Memory (Privacy)
 data/
@@ -31,3 +31,4 @@ db/
 # Dev Secrets & Scripts
 dev_start.bat
 user_profile.dev.txt
+GEMINI_API_KEY*.txt
