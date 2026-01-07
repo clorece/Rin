@@ -23,6 +23,7 @@ Rin is an intelligent, **visually and audio-aware** desktop companion designed t
 *   **Sequential Chat**: Rin communicates in natural, paced bursts (split messages) rather than long blocks of text.
 *   **Stealth User Mode**: Launches completely silently in the background via `start.bat`.
 *   **Chat Interface**: A clean, modern chat UI with smooth animations and "glass" aesthetics.
+*   **100% Local Processing**: Powered by Ollama with Vulkan GPU acceleration - no cloud API costs!
 
 ## Roadmap & Future Implementations: Rin's Thinking System
 
@@ -32,13 +33,12 @@ Rin is an intelligent, **visually and audio-aware** desktop companion designed t
 *   **Observation Buffer**: Accumulate observations (last 5-10) instead of immediate reactions.
 *   **Thinking Pauses**: Periodic analysis (every 45s) to determine significance.
 *   **Significance Detection**: Filter repetitive actions; only trigger for meaningful changes (new activity, deep focus).
-*   **Thoughtful Responses**: Gemini generates intentional messages or chooses `STAY_QUIET` to reduce noise by ~90%.
+*   **Thoughtful Responses**: Local LLM generates intentional messages or chooses `STAY_QUIET` to reduce noise by ~90%.
 
 ### Phase 2: Deep Thinking (Idle Mode)
 *   **Idle Detection**: Triggers after 2 minutes of inactivity.
 *   **Edge Knowledge Organization**: Merge duplicate knowledge, decay old items, and rebuild graph connections locally.
 *   **Pattern Analysis**: Identify workflows and temporal habits.
-*   **Gemini Validation**: Send top insights to the cloud for validation and deepening.
 *   **Response Pre-computation**: Generate and cache 3-5 responses for likely future contexts while user is AFK.
 
 ### Phase 3: Data Structure Improvements
@@ -55,13 +55,13 @@ Rin is an intelligent, **visually and audio-aware** desktop companion designed t
 ### Architecture Principles
 *   **Thin Client / Thick Edge**: Default to local computation; use cloud strategically.
 *   **Dual Thinking Modes**: Real-time (45s) + Deep (Idle).
-*   **Cost-Conscious**: Drastic API reduction through buffering and significance checks.
+*   **Cost-Conscious**: Zero API costs through local Ollama processing.
 
 ## Privacy & Security
 
 We take your privacy seriously. Rin is designed with a **Local-First** architecture:
+*   **100% Local**: All AI processing runs on your machine via Ollama. No data is sent to the cloud.
 *   **Local Storage**: All screenshots, audio buffers, logs, and long-term memories are stored locally on your device (in the `database/` and `logs/` folders).
-*   **Cloud Processing**: Rin uses the Google Gemini API for analysis. Data sent to the API is subject to [Google's Generative AI Terms of Service](https://policies.google.com/terms). Please review their data use policies, especially regarding the difference between free and paid API tiers.
 *   **You Control the Data**: You can view, edit, or delete your profile and memory database at any time.
 
 ## Getting Started
@@ -70,7 +70,8 @@ We take your privacy seriously. Rin is designed with a **Local-First** architect
 *   Windows 10/11
 *   Python 3.10+
 *   Node.js & npm
-*   A Google Gemini API Key (Multimodal)
+*   [Ollama](https://ollama.com/download) (local LLM runtime)
+*   GPU with Vulkan support recommended (AMD, NVIDIA, or Intel)
 
 ### Installation
 
@@ -80,11 +81,15 @@ We take your privacy seriously. Rin is designed with a **Local-First** architect
     cd rin
     ```
 
-4.  **Run Setup**:
+2.  **Install Ollama**:
+    Download and install from [ollama.com/download](https://ollama.com/download)
+
+3.  **Run Setup**:
     Double-click `setup.bat`. This will:
     *   Create a Python virtual environment for the backend.
     *   Install Python dependencies.
     *   Install Node.js dependencies for the frontend.
+    *   Download required Ollama models (gemma3:4b for chat, moondream for vision).
 
     > **Important Note:**
     > Unfortunately setup.bat is currently bugged, if you are updating or installing Python or Node.js please restart immediately after setup.bat,
@@ -92,19 +97,10 @@ We take your privacy seriously. Rin is designed with a **Local-First** architect
     > This may force you to do more than 1 restart and setup initializations.
     > I know this is not ideal, and will make a fix for it as soon as possible.
 
-3.  **Configure API Key**:
-    *   Create a file named `GEMINI_API_KEY.txt` in the root directory.
-    *   Paste your Gemini API key inside it.
-    
-    > **API Key & Usage Note:**
-    > *   **Free vs Paid:** You can absolutely use the **Free Tier** of the Gemini API. You are not forced to pay.
-    > *   **Rate Limits:** Be aware that the free tier has shorter rate limits (Requests Per Minute).
-    > *   **Future Optimization:** As seen in our [Roadmap](#roadmap--future-implementations-rins-thinking-system), we are actively implementing "Edge Thinking" features to **reduce API usage** significantly. By buffering observations and thinking locally, we aim to ensure a **responsive and efficient experience** while keeping API usage minimal.
-
 ### Usage
 
 *   **Start Rin**: Double-click **`start.bat`**.
-    *   This launches Rin in **User Mode**.
+    *   This launches Rin with GPU acceleration (Vulkan).
 *   **Debug Mode**: If you need to see logs or troubleshoot, use `debug.bat`.
 *   **Shutdown**: Click the Power button in the Rin header to cleanly shut down both the UI and the background brain.
 
@@ -128,7 +124,7 @@ If you encounter any bugs or issues, please report them via the **[GitHub Issues
 3.  **Attach relevant logs** from the `logs/` folder:
     *   **`error.log`**: For crashes or critical errors (Most Important).
     *   **`backend.log`**: For general system status.
-    *   **`api_usage.log`**: If the issue relates to Rin not seeing/hearing or API limits.
+    *   **`api_usage.log`**: If the issue relates to Rin not seeing/hearing.
     *   *(Note: Logs are auto-cleared on Rin's startup, so, if you have already restarted Rin before reading or uploading the logs, please reproduce the bug and then upload the logs immediately.)*
 4.  Include steps to reproduce the problem.
 
@@ -141,4 +137,4 @@ By **[@daisukerichard](https://x.com/daisukerichard)**
 If you are the original owner of credited work and assets, and would like credit adjustments or removal of assets from the project, please feel free to contact me through github.
 
 **Development**:
-Built with Electron, React, FastAPI, and Google Gemini.
+Built with Electron, React, FastAPI, and Ollama.

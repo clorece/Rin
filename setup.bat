@@ -3,7 +3,7 @@ echo ==========================================
 echo      RIN - SYSTEM SETUP
 echo ==========================================
 
-echo [1/3] Detecting Python...
+echo [1/4] Detecting Python...
 set CARBON_PYTHON=python
 
 :: Check if python exists
@@ -42,7 +42,26 @@ if errorlevel 1 (
 )
 echo   - Python 3.10+ detected.
 
-echo [2/3] Setting up Backend...
+echo [2/4] Checking Ollama...
+ollama --version > nul 2>&1
+if errorlevel 1 (
+    echo   ! WARNING: Ollama not found!
+    echo   ! Please install Ollama from: https://ollama.com/download
+    echo   ! After installation, run this setup again.
+    echo.
+    pause
+    exit /b
+)
+echo   - Ollama detected.
+
+echo   - Pulling required models...
+echo   - Downloading gemma3:4b (chat model)...
+ollama pull gemma3:4b
+echo   - Downloading moondream:latest (vision model)...
+ollama pull moondream:latest
+echo   - Models ready.
+
+echo [3/4] Setting up Backend...
 cd backend
 if not exist venv (
     echo   - Creating virtual environment...
@@ -71,7 +90,7 @@ if exist venv\Scripts\pywin32_postinstall.py (
 )
 cd ..
 
-echo [3/3] Setting up Frontend...
+echo [4/4] Setting up Frontend...
 echo   - Checking npm...
 call npm --version > nul 2>&1
 if errorlevel 1 (
@@ -101,14 +120,8 @@ echo ==========================================
 echo      SETUP COMPLETE - READY TO START
 echo ==========================================
 echo.
-if not exist GEMINI_API_KEY.txt (
-    echo [!] WARNING: GEMINI_API_KEY.txt not found!
-    echo     Rin needs an API Key to see and hear.
-    echo     Please create 'GEMINI_API_KEY.txt' in this folder and paste your key inside.
-    echo.
-) else (
-    echo [OK] API Key detected.
-)
-
+echo [OK] All dependencies installed.
+echo [OK] Ollama models downloaded.
+echo.
 echo You can now run 'start.bat'
 pause

@@ -79,7 +79,7 @@ class KnowledgeEngine:
         
         Returns: { "learned": bool, "new_context": bool, "insight": str|None, "proactive": str|None }
         """
-        from llm import mind
+        from ollama_llm import mind
         
         result = {
             "learned": False,

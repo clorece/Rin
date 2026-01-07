@@ -19,7 +19,7 @@ import asyncio
 from io import BytesIO
 from PIL import Image, ImageChops, ImageStat
 import database
-from llm import mind, split_into_chunks, get_api_session_stats
+from ollama_llm import mind, split_into_chunks, get_api_session_stats
 from capture import capture_screen_base64, get_active_window_title
 from activity_tracker import activity_collector
 from pattern_engine import pattern_engine
@@ -107,6 +107,15 @@ async def shutdown_event():
     activity_collector.stop()
     print("[Shutdown] Stopping ears...")
     ears.stop()
+    
+    # Unload Ollama models from memory
+    print("[Shutdown] Unloading Ollama models...")
+    try:
+        mind.unload_models()
+    except Exception as e:
+        print(f"[Shutdown] Ollama unload error: {e}")
+    
+    print("[Shutdown] Cleanup complete!")
 
 # Local log_activity removed in favor of logger module
 

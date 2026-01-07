@@ -30,5 +30,4 @@ db/
 
 # Dev Secrets & Scripts
 dev_start.bat
-GEMINI_API_KEY.dev.txt
 user_profile.dev.txt
