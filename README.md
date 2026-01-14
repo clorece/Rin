@@ -11,58 +11,7 @@
 
 Rin is an intelligent, **visually and audio-aware** desktop companion designed to quietly support your digital life. She observes your screen, hears your system audio, and understands your context, offering guidance or company when you need it. **She learns from your interactions**, becoming smarter and more personalized with every session. **All your data and memories are stored locally on your machine**, ensuring your privacy and security.
 
-## Features
-*   **Visual Awareness**: Rin "sees" your active window and understands what you are working on or playing.
-*   **Audio Awareness**: Rin "hears" system audio (music, game sounds) via loopback and uses it to understand the vibe.
-*   **Episodic Memory**: Rin remembers recent activities (e.g., "Back to coding?"), creating a continuous sense of companionship.
-*   **Continuous Learning**: Rin accumulates knowledge and memories from every session. The longer you use her, the smarter and more personalized her responses become.
-*   **Notification Center**: A dedicated, scrollable hub for Rin's observations and thoughts, separate from the chat.
-*   **Smart Idle System**:
-    *   **Active (Green)**: Rin is watching and ready to chat.
-    *   **Rest Mode (Yellow)**: Activates after 120s of inactivity. Rin pauses observation to save resources.
-*   **Sequential Chat**: Rin communicates in natural, paced bursts (split messages) rather than long blocks of text.
-*   **Stealth User Mode**: Launches completely silently in the background via `start.bat`.
-*   **Chat Interface**: A clean, modern chat UI with smooth animations and "glass" aesthetics.
-*   **100% Local Processing**: Powered by Ollama with Vulkan GPU acceleration - no cloud API costs!
-
-## Roadmap & Future Implementations: Rin's Thinking System
-
-**Goal:** Transform Rin into a Cloud-Accelerated Edge Intelligence that thinks before speaking and learns continuously.
-
-### Phase 1: Real-Time Thinking (Active Mode)
-*   **Observation Buffer**: Accumulate observations (last 5-10) instead of immediate reactions.
-*   **Thinking Pauses**: Periodic analysis (every 45s) to determine significance.
-*   **Significance Detection**: Filter repetitive actions; only trigger for meaningful changes (new activity, deep focus).
-*   **Thoughtful Responses**: Local LLM generates intentional messages or chooses `STAY_QUIET` to reduce noise by ~90%.
-
-### Phase 2: Deep Thinking (Idle Mode)
-*   **Idle Detection**: Triggers after 2 minutes of inactivity.
-*   **Edge Knowledge Organization**: Merge duplicate knowledge, decay old items, and rebuild graph connections locally.
-*   **Pattern Analysis**: Identify workflows and temporal habits.
-*   **Response Pre-computation**: Generate and cache 3-5 responses for likely future contexts while user is AFK.
-
-### Phase 3: Data Structure Improvements
-*   **Hierarchical Knowledge Graph**: Tiers for Core Identity, Working Memory, and Episodic Memory.
-*   **Knowledge Decay**: Automatic confidence decay for unused information.
-*   **Smart Caching**: Context-hash based caching with LRU eviction and TTL.
-
-### Phase 4: UX & Integration
-*   **Thinking Indicators**: Visual status for "Thinking" or "Deep Reflection".
-*   **Proactive Insight Sharing**: Share deep thoughts discovered during idle time (based on relevance).
-*   **"What are you thinking?"**: Feature to ask Rin about her current internal reflections.
-*   **Personality Consistency**: Enforce tone consistency across edge and cloud responses.
-
-### Architecture Principles
-*   **Thin Client / Thick Edge**: Default to local computation; use cloud strategically.
-*   **Dual Thinking Modes**: Real-time (45s) + Deep (Idle).
-*   **Cost-Conscious**: Zero API costs through local Ollama processing.
-
-## Privacy & Security
-
-We take your privacy seriously. Rin is designed with a **Local-First** architecture:
-*   **100% Local**: All AI processing runs on your machine via Ollama. No data is sent to the cloud.
-*   **Local Storage**: All screenshots, audio buffers, logs, and long-term memories are stored locally on your device (in the `database/` and `logs/` folders).
-*   **You Control the Data**: You can view, edit, or delete your profile and memory database at any time.
+### Rin is currently to be under a replanning phase as I have switched to linux and will temporary put windows support on hold until I get dual booting to work. Please expect a lot of issues with the current commit of Rin
 
 ## Getting Started
 
