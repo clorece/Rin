@@ -11,8 +11,6 @@
 
 Rin is an intelligent, **visually and audio-aware** desktop companion designed to quietly support your digital life. She observes your screen, hears your system audio, and understands your context, offering guidance or company when you need it. **She learns from your interactions**, becoming smarter and more personalized with every session. **All your data and memories are stored locally on your machine**, ensuring your privacy and security.
 
-### Rin is currently to be under a replanning phase as I have switched to linux and will temporary put windows support on hold until I get dual booting to work. Please expect a lot of issues with the current commit of Rin
-
 ## Getting Started
 
 ### Prerequisites
