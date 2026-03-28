@@ -1,6 +1,6 @@
 # Rin - AI Desktop Companion
 
-> An edge intelligence companion for your personal computer.
+> An intelligence companion for your personal computer.
 
 <div align="center">
   <img src="frontend/src/assets/rin-showcase.jpg" alt="Rin Profile Picture" width="500"/>
